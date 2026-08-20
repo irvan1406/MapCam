@@ -62,7 +62,7 @@ final class StartupRecoveryView {
 
         TextView message = text(
                 activity,
-                "GPS Map Camera berhasil mencegah aplikasi tertutup. Perbarui Android System WebView atau Google Chrome, kemudian coba lagi.",
+                "GPS Map Camera berhasil mencegah aplikasi tertutup. Tekan Coba Lagi. Jika error berkaitan dengan WebView, gunakan tombol pengaturan di bawah.",
                 15,
                 COLOR_MUTED,
                 Typeface.NORMAL

@@ -7,6 +7,7 @@ Semua perubahan penting mengikuti [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Mencegah aplikasi langsung tertutup ketika Android System WebView gagal dibuat atau renderer berhenti.
+- Memperbaiki `NullPointerException` saat konfigurasi system bar dijalankan sebelum Android membuat `DecorView`.
 - Menambahkan layar pemulihan native dengan tombol coba lagi, pengaturan WebView, dan detail diagnostik.
 - Melindungi pemanggilan JavaScript serta penyimpanan state ketika WebView sudah tidak tersedia.
 

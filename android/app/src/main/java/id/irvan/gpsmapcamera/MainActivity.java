@@ -162,17 +162,18 @@ public class MainActivity extends Activity {
 
     private void configureSystemBars() {
         Window window = getWindow();
+        View decorView = window.getDecorView();
         window.setStatusBarColor(Color.TRANSPARENT);
         window.setNavigationBarColor(Color.rgb(244, 248, 252));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(true);
-            WindowInsetsController controller = window.getInsetsController();
+            WindowInsetsController controller = decorView.getWindowInsetsController();
             if (controller != null) controller.setSystemBarsAppearance(
                     WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
                     WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
             );
         } else {
-            window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
     }
 
