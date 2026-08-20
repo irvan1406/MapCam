@@ -14,7 +14,7 @@ permissions:
 jobs:
   quality-and-debug-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -44,6 +44,31 @@ jobs:
 
       - name: Build debug APK
         run: gradle -p android :app:assembleDebug --stacktrace
+
+      - name: Enable Android emulator acceleration
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+          fi
+
+      - name: Smoke test startup on Android 14
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: bash scripts/android-smoke-test.sh
+
+      - name: Upload startup diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-smoke-diagnostics
+          path: android/app/build/reports/startup-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Name debug APK
         run: |

@@ -35,6 +35,7 @@ class GPSMapCameraApp {
     this.batchProjectIds = [];
     this.currentRoute = null;
     this.renderNumber = 0;
+    this.nativeReadyReported = false;
   }
 
   async init() {
@@ -73,6 +74,11 @@ class GPSMapCameraApp {
     else this.router.navigate('/home');
     if (renderNumber !== this.renderNumber) return;
     this.root.querySelector('main')?.focus?.({ preventScroll: true });
+    if (!this.nativeReadyReported && route.path === '/home') {
+      this.nativeReadyReported = true;
+      try { globalThis.AndroidBridge?.reportReady?.(); }
+      catch (error) { console.warn('[android] Ready signal gagal dikirim', error); }
+    }
   }
 
   bindGlobalActions() {

@@ -2,6 +2,19 @@
 
 Semua perubahan penting mengikuti [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-08-20
+
+### Fixed
+
+- Mencegah aplikasi langsung tertutup ketika Android System WebView gagal dibuat atau renderer berhenti.
+- Menambahkan layar pemulihan native dengan tombol coba lagi, pengaturan WebView, dan detail diagnostik.
+- Melindungi pemanggilan JavaScript serta penyimpanan state ketika WebView sudah tidak tersedia.
+
+### Improved
+
+- Menambahkan sinyal kesiapan halaman utama dan smoke test startup pada emulator Android 14 di GitHub Actions.
+- Menyimpan log, status activity, informasi WebView, dan screenshot sebagai diagnostic artifact ketika smoke test gagal.
+
 ## [1.0.0] - 2026-08-20
 
 ### Added

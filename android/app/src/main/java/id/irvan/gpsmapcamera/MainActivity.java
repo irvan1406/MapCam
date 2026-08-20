@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -21,13 +22,16 @@ import android.os.Looper;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Base64;
+import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -50,6 +54,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends Activity {
+    private static final String TAG = "GPSMapCamera";
     private static final int REQUEST_FILE_CHOOSER = 2101;
     private static final int REQUEST_CAMERA_PERMISSION = 2102;
     private static final int REQUEST_LOCATION_PERMISSION = 2103;
@@ -66,13 +71,49 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        configureSystemBars();
-        webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(244, 248, 252));
-        setContentView(webView);
-        configureWebView();
-        if (savedInstanceState == null) webView.loadUrl(APP_ORIGIN + "/index.html#/home");
-        else webView.restoreState(savedInstanceState);
+        startWebApp(savedInstanceState);
+    }
+
+    private void startWebApp(Bundle savedInstanceState) {
+        destroyWebView();
+        try {
+            configureSystemBars();
+            PackageInfo provider = WebView.getCurrentWebViewPackage();
+            if (provider == null) throw new IllegalStateException("Android System WebView tidak tersedia atau dinonaktifkan.");
+            Log.i(TAG, "Starting with WebView " + provider.packageName + " " + provider.versionName);
+
+            webView = new WebView(this);
+            webView.setBackgroundColor(Color.rgb(244, 248, 252));
+            configureWebView();
+            setContentView(webView);
+
+            boolean restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null;
+            if (!restored) webView.loadUrl(APP_ORIGIN + "/index.html#/home");
+        } catch (Throwable error) {
+            showStartupFailure(error);
+        }
+    }
+
+    private void showStartupFailure(Throwable error) {
+        Log.e(TAG, "Application startup failed", error);
+        destroyWebView();
+        setContentView(StartupRecoveryView.create(this, error, () -> startWebApp(null)));
+    }
+
+    private void destroyWebView() {
+        WebView current = webView;
+        webView = null;
+        if (current == null) return;
+        try { if (current.getParent() instanceof ViewGroup) ((ViewGroup) current.getParent()).removeView(current); }
+        catch (RuntimeException error) { Log.w(TAG, "WebView detach failed", error); }
+        try { current.stopLoading(); }
+        catch (RuntimeException error) { Log.w(TAG, "WebView stop failed", error); }
+        try { current.removeJavascriptInterface("AndroidBridge"); }
+        catch (RuntimeException error) { Log.w(TAG, "WebView bridge cleanup failed", error); }
+        try { current.setWebChromeClient(null); }
+        catch (RuntimeException error) { Log.w(TAG, "WebView client cleanup failed", error); }
+        try { current.destroy(); }
+        catch (RuntimeException error) { Log.w(TAG, "WebView destroy failed", error); }
     }
 
     @SuppressWarnings("deprecation")
@@ -306,7 +347,7 @@ public class MainActivity extends Activity {
             payload.put("speed", location.hasSpeed() ? location.getSpeed() : JSONObject.NULL);
             payload.put("heading", location.hasBearing() ? location.getBearing() : JSONObject.NULL);
             String script = "window.__nativeLocationSuccess(" + JSONObject.quote(payload.toString()) + ")";
-            runOnUiThread(() -> webView.evaluateJavascript(script, null));
+            evaluateJavascriptSafely(script);
         } catch (Exception error) {
             sendLocationError(error.getMessage());
         }
@@ -314,7 +355,19 @@ public class MainActivity extends Activity {
 
     private void sendLocationError(String message) {
         String script = "window.__nativeLocationError(" + JSONObject.quote(message == null ? getString(R.string.location_failed) : message) + ")";
-        runOnUiThread(() -> webView.evaluateJavascript(script, null));
+        evaluateJavascriptSafely(script);
+    }
+
+    private void evaluateJavascriptSafely(String script) {
+        runOnUiThread(() -> {
+            WebView current = webView;
+            if (current == null) return;
+            try {
+                current.evaluateJavascript(script, null);
+            } catch (RuntimeException error) {
+                Log.w(TAG, "JavaScript bridge call ignored because WebView is unavailable", error);
+            }
+        });
     }
 
     private void copyCameraOriginalToGallery(Uri sourceUri) {
@@ -415,28 +468,29 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
-        webView.saveState(outState);
+        if (webView != null) {
+            try { webView.saveState(outState); }
+            catch (RuntimeException error) { Log.w(TAG, "WebView state could not be saved", error); }
+        }
         super.onSaveInstanceState(outState);
     }
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
+        if (webView != null && webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
     }
 
     @Override
     protected void onDestroy() {
-        if (webView != null) {
-            webView.removeJavascriptInterface("AndroidBridge");
-            webView.destroy();
-        }
+        destroyWebView();
         super.onDestroy();
     }
 
     public final class NativeBridge {
         @JavascriptInterface public String getPlatform() { return "android"; }
         @JavascriptInterface public String getAppVersion() { return BuildConfig.VERSION_NAME; }
+        @JavascriptInterface public void reportReady() { Log.i(TAG, "WEB_APP_READY " + BuildConfig.VERSION_NAME); }
         @JavascriptInterface public void requestLocation() { requestNativeLocation(); }
 
         @JavascriptInterface
@@ -446,7 +500,7 @@ public class MainActivity extends Activity {
                     Uri saved = saveBytesToGallery(decodeDataUrl(dataUrl), fileName, "Exported");
                     toast(getString(R.string.photo_saved));
                     String script = "window.dispatchEvent(new CustomEvent('native-save-complete',{detail:" + JSONObject.quote(saved.toString()) + "}))";
-                    runOnUiThread(() -> webView.evaluateJavascript(script, null));
+                    evaluateJavascriptSafely(script);
                 } catch (Exception error) {
                     toast(getString(R.string.photo_save_failed) + ": " + error.getMessage());
                 }
@@ -471,6 +525,20 @@ public class MainActivity extends Activity {
     }
 
     private final class LocalAssetWebViewClient extends WebViewClient {
+        @Override
+        public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            String reason = detail.didCrash()
+                    ? "Renderer Android System WebView berhenti secara tidak terduga."
+                    : "Renderer Android System WebView dihentikan karena perangkat kekurangan memori.";
+            Log.e(TAG, reason + " Priority at exit: " + detail.rendererPriorityAtExit());
+            if (view == webView) runOnUiThread(() -> showStartupFailure(new IllegalStateException(reason)));
+            else {
+                try { view.destroy(); }
+                catch (RuntimeException error) { Log.w(TAG, "Detached WebView cleanup failed", error); }
+            }
+            return true;
+        }
+
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();

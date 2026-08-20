@@ -4,7 +4,7 @@
 
 Aplikasi Android mobile-first untuk mengambil foto baru dengan GPS map stamp atau membuat versi GPS Map baru dari foto galeri. Data aktual/EXIF disimpan sebagai **Original Data**, sedangkan perubahan pengguna disimpan terpisah sebagai **Display Data**. Foto sumber tidak pernah ditimpa.
 
-Versi awal: **1.0.0** · Package: `id.irvan.gpsmapcamera` · Project schema: **v2**
+Versi terbaru: **1.0.1** · Package: `id.irvan.gpsmapcamera` · Project schema: **v2**
 
 ## Fitur yang berfungsi
 
