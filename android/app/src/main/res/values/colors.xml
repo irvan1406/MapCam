@@ -1,0 +1,5 @@
+<resources>
+    <color name="launcher_background">#061525</color>
+    <color name="app_background">#F4F8FC</color>
+    <color name="app_primary">#0EA5E9</color>
+</resources>

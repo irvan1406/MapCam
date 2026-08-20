@@ -1,0 +1,20 @@
+{
+  "name": "gps-map-camera",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GPS Map Camera & GPS Photo Editor for Android and the web.",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build.mjs",
+    "lint": "node scripts/lint.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run lint && npm test && npm run build",
+    "android:debug": "npm run build && ./gradlew -p android assembleDebug",
+    "android:release": "npm run check && ./gradlew -p android assembleRelease bundleRelease",
+    "version:check": "node scripts/version-check.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

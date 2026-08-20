@@ -1,0 +1,78 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id "com.android.application"
+}
+
+def repositoryRoot = rootProject.projectDir.parentFile
+def appConfig = new JsonSlurper().parse(new File(repositoryRoot, "app.config.json"))
+def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+
+tasks.register("buildWeb", Exec) {
+    workingDir repositoryRoot
+    commandLine isWindows ? "npm.cmd" : "npm", "run", "build"
+    inputs.dir(new File(repositoryRoot, "src"))
+    inputs.dir(new File(repositoryRoot, "public"))
+    inputs.file(new File(repositoryRoot, "app.config.json"))
+    outputs.dir(new File(repositoryRoot, "dist"))
+}
+
+android {
+    namespace appConfig.app.packageId
+    compileSdk 37
+
+    defaultConfig {
+        applicationId appConfig.app.packageId
+        minSdk 26
+        targetSdk 37
+        versionCode appConfig.app.versionCode as int
+        versionName appConfig.app.versionName
+        testInstrumentationRunner "android.test.InstrumentationTestRunner"
+        buildConfigField "String", "APP_NAME", "\"${appConfig.app.name}\""
+    }
+
+    sourceSets {
+        main.assets.srcDirs = [new File(repositoryRoot, "dist")]
+    }
+
+    signingConfigs {
+        def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+        if (keystorePath && System.getenv("ANDROID_KEYSTORE_PASSWORD") && System.getenv("ANDROID_KEY_ALIAS") && System.getenv("ANDROID_KEY_PASSWORD")) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            debuggable true
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            if (signingConfigs.findByName("release") != null) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    packaging {
+        resources.excludes += ["META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*"]
+    }
+}
+
+tasks.named("preBuild").configure { dependsOn tasks.named("buildWeb") }

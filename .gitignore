@@ -1,0 +1,38 @@
+# Build output
+dist/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+*.aab
+
+# Dependencies and caches
+node_modules/
+.cache/
+.npm/
+*.log
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+release.keystore
+secrets.properties
+
+# Temporary media
+tmp/
+temp/
+*.tmp
+*.bak

@@ -1,0 +1,138 @@
+name: Android CI and Release
+
+on:
+  push:
+    branches: [main, develop, "feature/**", "fix/**"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle 9.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Install Android SDK 37
+        run: yes | sdkmanager "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint, test, and build web app
+        run: npm run check
+
+      - name: Build debug APK
+        run: gradle -p android :app:assembleDebug --stacktrace
+
+      - name: Name debug APK
+        run: |
+          VERSION=$(node -p "require('./app.config.json').app.versionName")
+          mkdir -p release-files
+          cp android/app/build/outputs/apk/debug/app-debug.apk "release-files/GPSMapCamera-v${VERSION}-debug.apk"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gps-map-camera-debug-apk
+          path: release-files/*-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  signed-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: quality-and-debug-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle 9.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Install Android SDK 37
+        run: yes | sdkmanager "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Install and validate
+        run: npm ci && npm run check
+
+      - name: Verify tag and signing secrets
+        run: |
+          VERSION=$(node -p "require('./app.config.json').app.versionName")
+          test "${GITHUB_REF_NAME}" = "v${VERSION}" || { echo "Tag must equal v${VERSION}"; exit 1; }
+          test -n "${ANDROID_KEYSTORE_BASE64}" || { echo "ANDROID_KEYSTORE_BASE64 is missing"; exit 1; }
+          test -n "${ANDROID_KEYSTORE_PASSWORD}" || { echo "ANDROID_KEYSTORE_PASSWORD is missing"; exit 1; }
+          test -n "${ANDROID_KEY_ALIAS}" || { echo "ANDROID_KEY_ALIAS is missing"; exit 1; }
+          test -n "${ANDROID_KEY_PASSWORD}" || { echo "ANDROID_KEY_PASSWORD is missing"; exit 1; }
+
+      - name: Restore signing keystore
+        run: |
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/gps-map-camera-release.jks"
+          echo "ANDROID_KEYSTORE_PATH=${RUNNER_TEMP}/gps-map-camera-release.jks" >> "${GITHUB_ENV}"
+
+      - name: Build signed APK and AAB
+        run: gradle -p android :app:assembleRelease :app:bundleRelease --stacktrace
+
+      - name: Prepare release files
+        run: |
+          VERSION=$(node -p "require('./app.config.json').app.versionName")
+          mkdir -p release-files
+          cp android/app/build/outputs/apk/release/app-release.apk "release-files/GPSMapCamera-v${VERSION}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "release-files/GPSMapCamera-v${VERSION}.aab"
+          sha256sum release-files/* > release-files/SHA256SUMS.txt
+
+      - name: Upload signed build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gps-map-camera-${{ github.ref_name }}
+          path: release-files/
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        run: gh release create "${GITHUB_REF_NAME}" release-files/* --title "GPS Map Camera ${GITHUB_REF_NAME}" --generate-notes --verify-tag

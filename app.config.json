@@ -1,0 +1,55 @@
+{
+  "app": {
+    "name": "GPS Map Camera",
+    "shortName": "GPS Camera",
+    "packageId": "id.irvan.gpsmapcamera",
+    "versionName": "1.0.0",
+    "versionCode": 1,
+    "projectSchemaVersion": 2,
+    "supportEmail": ""
+  },
+  "features": {
+    "batchExport": true,
+    "customPresets": true,
+    "nativeBridge": true,
+    "offlineEditor": true
+  },
+  "maps": {
+    "defaultProvider": "openstreetmap",
+    "defaultZoom": 16,
+    "minZoom": 2,
+    "maxZoom": 19,
+    "providers": [
+      {
+        "id": "openstreetmap",
+        "label": "Standard",
+        "style": "standard",
+        "enabled": true,
+        "tileUrl": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "attribution": "© OpenStreetMap contributors",
+        "maxZoom": 19
+      }
+    ]
+  },
+  "geocoding": {
+    "enabled": true,
+    "endpoint": "https://nominatim.openstreetmap.org",
+    "language": "id",
+    "minimumIntervalMs": 1100,
+    "cacheTtlDays": 30
+  },
+  "export": {
+    "defaultQuality": "high",
+    "jpegQuality": {
+      "maximum": 0.96,
+      "high": 0.9,
+      "medium": 0.78
+    },
+    "maxMegapixels": {
+      "maximum": 80,
+      "high": 24,
+      "medium": 12
+    },
+    "fileNamePattern": "GPSMapCamera-{date}-{time}"
+  }
+}
