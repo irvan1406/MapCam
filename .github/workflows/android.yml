@@ -15,6 +15,9 @@ jobs:
   quality-and-debug-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -84,6 +87,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Send debug APK to Telegram
+        if: github.event_name != 'pull_request'
+        run: |
+          VERSION=$(node -p "require('./app.config.json').app.versionName")
+          bash scripts/telegram-send-apk.sh \
+            "release-files/GPSMapCamera-v${VERSION}-debug.apk" \
+            "GPS Map Camera v${VERSION} debug | ${GITHUB_SHA::7}"
+
   signed-release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: quality-and-debug-apk
@@ -96,6 +107,8 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
@@ -152,6 +165,13 @@ jobs:
           name: gps-map-camera-${{ github.ref_name }}
           path: release-files/
           if-no-files-found: error
+
+      - name: Send signed APK to Telegram
+        run: |
+          VERSION=$(node -p "require('./app.config.json').app.versionName")
+          bash scripts/telegram-send-apk.sh \
+            "release-files/GPSMapCamera-v${VERSION}.apk" \
+            "GPS Map Camera v${VERSION} signed release"
 
       - name: Create GitHub Release
         run: gh release create "${GITHUB_REF_NAME}" release-files/* --title "GPS Map Camera ${GITHUB_REF_NAME}" --generate-notes --verify-tag
