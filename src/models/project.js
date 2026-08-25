@@ -1,14 +1,16 @@
 import { createId } from '../utils/id.js';
 import { toLocalIso } from '../utils/date.js';
-import { getTemplate, cloneTemplate } from './templates.js';
+import { getTemplate, cloneTemplate, FIELD_DEFAULTS } from './templates.js';
 
-export const PROJECT_SCHEMA_VERSION = 2;
+export const PROJECT_SCHEMA_VERSION = 3;
 
 const emptyMetadata = () => ({
   latitude: null,
   longitude: null,
+  placeName: '',
   address: '',
   addressLines: [],
+  countryCode: '',
   dateTime: null,
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   compass: null,
@@ -56,7 +58,7 @@ export function createProject({ sourceType, file, metadata = {}, settings, custo
     fileNamePattern: settings.fileNamePattern,
     overlay: {
       x: 0.04,
-      y: 0.69,
+      y: 0.72,
       width: 0.92,
       scale: 1,
       opacity: 1,
@@ -73,7 +75,7 @@ export function createProject({ sourceType, file, metadata = {}, settings, custo
     lastExportName: null,
     createdAt: now,
     modifiedAt: now,
-    appVersion: '1.0.0',
+    appVersion: null,
   };
 }
 
@@ -111,13 +113,23 @@ export function duplicateProject(project) {
 export function migrateProject(project) {
   if (!project || typeof project !== 'object') throw new Error('Project tidak valid.');
   const schemaVersion = project.schemaVersion ?? 1;
-  if (schemaVersion === PROJECT_SCHEMA_VERSION) return project;
-  if (schemaVersion === 1) {
-    project.schemaVersion = 2;
+  if (schemaVersion === PROJECT_SCHEMA_VERSION) {
+    project.template.layout = { variant: 'classic', ...project.template.layout };
+    project.template.fields = { ...FIELD_DEFAULTS, ...project.template.fields };
+    project.originalData = { ...emptyMetadata(), ...project.originalData };
+    project.displayData = { ...emptyMetadata(), ...project.displayData };
+    return project;
+  }
+  if (schemaVersion === 1 || schemaVersion === 2) {
+    project.schemaVersion = PROJECT_SCHEMA_VERSION;
     project.editedFields ??= {};
     project.texts ??= [];
     project.map ??= { providerId: 'openstreetmap', zoom: 16, centerMode: 'display-location', available: true };
-    project.overlay ??= { x: 0.04, y: 0.69, width: 0.92, scale: 1, opacity: 1, textScale: 1, mapScale: 1, alignment: 'left', rotation: 0 };
+    project.overlay ??= { x: 0.04, y: 0.72, width: 0.92, scale: 1, opacity: 1, textScale: 1, mapScale: 1, alignment: 'left', rotation: 0 };
+    project.template.layout = { variant: 'classic', ...project.template.layout };
+    project.template.fields = { ...FIELD_DEFAULTS, ...project.template.fields };
+    project.originalData = { ...emptyMetadata(), ...project.originalData };
+    project.displayData = { ...emptyMetadata(), ...project.displayData };
     project.dateFormat ??= 'long-id';
     project.timeFormat ??= '24-seconds';
     project.coordinateFormat ??= 'decimal';

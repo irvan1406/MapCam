@@ -8,6 +8,7 @@ test('Indonesian date formats are deterministic', () => {
   assert.equal(formatDate(value, 'dd-mm-yyyy'), '20-08-2026');
   assert.equal(formatDate(value, 'long-id'), '20 Agustus 2026');
   assert.match(formatTime(value, '24-seconds', false), /05[.:]50[.:]32/);
+  assert.match(formatTime(value, '24-seconds', true, 'WIB'), /WIB$/);
 });
 
 test('date and time inputs combine with seconds', () => {

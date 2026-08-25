@@ -29,6 +29,9 @@ const paths = {
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   upload: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 21h14a2 2 0 0 0 2-2v-4M3 15v4a2 2 0 0 0 2 2"/>',
   palette: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.6-1.4-.4-.4-.6-.9-.6-1.4a2 2 0 0 1 2-2H17a5 5 0 0 0 5-5C22 5.7 17.5 2 12 2Z"/>',
+  flash: '<path d="m13 2-9 12h7l-1 8 9-12h-7z"/>',
+  flipCamera: '<path d="M20 7h-7l2.5-2.5M4 17h7l-2.5 2.5"/><path d="M18.5 12a7 7 0 0 1-12.1 4.8M5.5 12A7 7 0 0 1 17.6 7.2"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
 };
 
 export function icon(name, size = 22, className = '') {

@@ -26,11 +26,11 @@ import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
+import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -44,11 +44,15 @@ import android.widget.Toast;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,6 +63,10 @@ public class MainActivity extends Activity {
     private static final int REQUEST_CAMERA_PERMISSION = 2102;
     private static final int REQUEST_LOCATION_PERMISSION = 2103;
     private static final String APP_ORIGIN = "https://app.local";
+    private static final String REMOTE_WEB_ROOT = BuildConfig.WEB_APP_URL;
+    private static final int REMOTE_CONNECT_TIMEOUT_MS = 4500;
+    private static final int REMOTE_READ_TIMEOUT_MS = 9000;
+    private static final int MAX_REMOTE_ASSET_BYTES = 6 * 1024 * 1024;
 
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
@@ -66,7 +74,9 @@ public class MainActivity extends Activity {
     private Uri cameraOutputUri;
     private GeolocationPermissions.Callback pendingGeoCallback;
     private String pendingGeoOrigin;
+    private PermissionRequest pendingWebCameraRequest;
     private boolean nativeLocationPending;
+    private volatile long remoteRetryAfterEpochMs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,7 +98,7 @@ public class MainActivity extends Activity {
             setContentView(webView);
 
             boolean restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null;
-            if (!restored) webView.loadUrl(APP_ORIGIN + "/index.html#/home");
+            if (!restored) webView.loadUrl(APP_ORIGIN + "/index.html?shell=2#/home");
         } catch (Throwable error) {
             showStartupFailure(error);
         }
@@ -125,7 +135,7 @@ public class MainActivity extends Activity {
         settings.setGeolocationEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
-        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -136,6 +146,10 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (!isTrustedPage(view.getUrl())) {
+                    callback.onReceiveValue(null);
+                    return true;
+                }
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
                 if (params.isCaptureEnabled() && !hasPermission(Manifest.permission.CAMERA)) {
@@ -149,6 +163,10 @@ public class MainActivity extends Activity {
 
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                if (!isTrustedPage(origin)) {
+                    callback.invoke(origin, false, false);
+                    return;
+                }
                 if (hasLocationPermission()) {
                     callback.invoke(origin, true, false);
                 } else {
@@ -157,24 +175,65 @@ public class MainActivity extends Activity {
                     requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION);
                 }
             }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> handleWebPermissionRequest(request));
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (pendingWebCameraRequest == request) pendingWebCameraRequest = null;
+            }
         });
     }
 
+    private void handleWebPermissionRequest(PermissionRequest request) {
+        if (request == null || !isTrustedPage(request.getOrigin().toString()) || !requestsVideoCapture(request)) {
+            if (request != null) request.deny();
+            return;
+        }
+        if (hasPermission(Manifest.permission.CAMERA)) {
+            request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+            return;
+        }
+        if (pendingWebCameraRequest != null) pendingWebCameraRequest.deny();
+        pendingWebCameraRequest = request;
+        requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+    }
+
+    private boolean requestsVideoCapture(PermissionRequest request) {
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) return true;
+        }
+        return false;
+    }
+
     private void configureSystemBars() {
+        applySystemBarMode(false);
+    }
+
+    private void applySystemBarMode(boolean cameraMode) {
         Window window = getWindow();
         View decorView = window.getDecorView();
-        window.setStatusBarColor(Color.TRANSPARENT);
-        window.setNavigationBarColor(Color.rgb(244, 248, 252));
+        window.setStatusBarColor(cameraMode ? Color.BLACK : Color.TRANSPARENT);
+        window.setNavigationBarColor(cameraMode ? Color.BLACK : Color.rgb(244, 248, 252));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(true);
             WindowInsetsController controller = decorView.getWindowInsetsController();
-            if (controller != null) controller.setSystemBarsAppearance(
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            );
+            if (controller != null) {
+                int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(cameraMode ? 0 : mask, mask);
+            }
         } else {
-            decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            decorView.setSystemUiVisibility(cameraMode ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
+    }
+
+    private boolean isTrustedPage(String value) {
+        if (value == null) return false;
+        Uri uri = Uri.parse(value);
+        return "https".equalsIgnoreCase(uri.getScheme()) && "app.local".equalsIgnoreCase(uri.getHost());
     }
 
     private void launchFileChooser(WebChromeClient.FileChooserParams params) {
@@ -257,8 +316,15 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            if (hasPermission(Manifest.permission.CAMERA) && pendingFileChooserParams != null) launchFileChooser(pendingFileChooserParams);
-            else {
+            boolean granted = hasPermission(Manifest.permission.CAMERA);
+            if (pendingWebCameraRequest != null) {
+                PermissionRequest request = pendingWebCameraRequest;
+                pendingWebCameraRequest = null;
+                if (granted) request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+                else request.deny();
+            }
+            if (granted && pendingFileChooserParams != null) launchFileChooser(pendingFileChooserParams);
+            else if (pendingFileChooserParams != null) {
                 completeFileChooser(null);
                 toast(getString(R.string.camera_permission_denied));
             }
@@ -493,6 +559,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getAppVersion() { return BuildConfig.VERSION_NAME; }
         @JavascriptInterface public void reportReady() { Log.i(TAG, "WEB_APP_READY " + BuildConfig.VERSION_NAME); }
         @JavascriptInterface public void requestLocation() { requestNativeLocation(); }
+        @JavascriptInterface public void setCameraMode(boolean enabled) { runOnUiThread(() -> applySystemBarMode(enabled)); }
 
         @JavascriptInterface
         public void saveImage(String dataUrl, String fileName) {
@@ -506,6 +573,14 @@ public class MainActivity extends Activity {
                     toast(getString(R.string.photo_save_failed) + ": " + error.getMessage());
                 }
             }, "save-exported-photo").start();
+        }
+
+        @JavascriptInterface
+        public void saveOriginalImage(String dataUrl, String fileName) {
+            new Thread(() -> {
+                try { saveBytesToGallery(decodeDataUrl(dataUrl), fileName, "Original"); }
+                catch (Exception error) { Log.w(TAG, "Camera original could not be saved", error); }
+            }, "save-camera-original-web").start();
         }
 
         @JavascriptInterface
@@ -544,21 +619,101 @@ public class MainActivity extends Activity {
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();
             if (!"app.local".equals(uri.getHost())) return null;
-            String path = uri.getPath();
-            if (path == null || path.equals("/")) path = "/index.html";
-            path = path.substring(1);
-            if (path.contains("..")) return response(403, "text/plain", new ByteArrayInputStream("Forbidden".getBytes()));
+            if (!"GET".equalsIgnoreCase(request.getMethod())) return response(405, "text/plain", new ByteArrayInputStream("Method not allowed".getBytes(StandardCharsets.UTF_8)));
+            String path = normalizedAssetPath(uri);
+            if (path == null) return response(403, "text/plain", new ByteArrayInputStream("Forbidden".getBytes(StandardCharsets.UTF_8)));
+            try {
+                WebResourceResponse remote = fetchRemoteAsset(uri, path);
+                if (remote != null) return remote;
+            } catch (Exception error) {
+                remoteRetryAfterEpochMs = System.currentTimeMillis() + 30_000L;
+                Log.w(TAG, "Remote web update unavailable for " + path + ", using bundled fallback", error);
+            }
             try {
                 InputStream stream = getAssets().open(path);
                 return response(200, mimeType(path), stream);
             } catch (IOException error) {
-                return response(404, "text/plain", new ByteArrayInputStream("Not found".getBytes()));
+                return response(404, "text/plain", new ByteArrayInputStream("Not found".getBytes(StandardCharsets.UTF_8)));
             }
         }
 
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            if (!request.isForMainFrame()) return false;
+            Uri uri = request.getUrl();
+            if ("https".equalsIgnoreCase(uri.getScheme()) && "app.local".equalsIgnoreCase(uri.getHost())) return false;
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            } catch (Exception error) {
+                toast("Tautan tidak dapat dibuka.");
+            }
+            return true;
+        }
+
+        private String normalizedAssetPath(Uri uri) {
+            String path = uri.getPath();
+            if (path == null || path.equals("/")) path = "/index.html";
+            if (!path.startsWith("/") || path.contains("..")) return null;
+            return path.substring(1);
+        }
+
+        private WebResourceResponse fetchRemoteAsset(Uri localUri, String path) throws IOException {
+            if (REMOTE_WEB_ROOT == null || REMOTE_WEB_ROOT.trim().isEmpty()) return null;
+            if (System.currentTimeMillis() < remoteRetryAfterEpochMs) return null;
+            String root = REMOTE_WEB_ROOT.endsWith("/") ? REMOTE_WEB_ROOT : REMOTE_WEB_ROOT + "/";
+            String query = localUri.getEncodedQuery();
+            URL remoteUrl = new URL(root + path + (query == null ? "" : "?" + query));
+            HttpURLConnection connection = (HttpURLConnection) remoteUrl.openConnection();
+            connection.setConnectTimeout(REMOTE_CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(REMOTE_READ_TIMEOUT_MS);
+            connection.setInstanceFollowRedirects(true);
+            connection.setUseCaches(false);
+            connection.setRequestProperty("Accept", "text/html,application/javascript,application/json,text/css,image/*,*/*;q=0.8");
+            connection.setRequestProperty("User-Agent", "GPSMapCamera-Android/" + BuildConfig.VERSION_NAME);
+            try {
+                int status = connection.getResponseCode();
+                if (status < 200 || status >= 300) throw new IOException("Remote HTTP " + status);
+                byte[] body;
+                try (InputStream input = connection.getInputStream()) {
+                    body = readRemoteAsset(input);
+                }
+                if ("index.html".equals(path)) {
+                    String html = new String(body, StandardCharsets.UTF_8);
+                    if (!html.contains("./bootstrap.js") || !html.contains("GPS Map Camera")) throw new IOException("Remote index is not a MapCam web build");
+                }
+                String contentType = connection.getContentType();
+                String mime = contentType == null ? mimeType(path) : contentType.split(";", 2)[0];
+                java.util.HashMap<String, String> headers = new java.util.HashMap<>();
+                headers.put("Cache-Control", "no-cache, no-store, must-revalidate");
+                headers.put("Access-Control-Allow-Origin", APP_ORIGIN);
+                remoteRetryAfterEpochMs = 0;
+                return response(200, mime, headers, new ByteArrayInputStream(body));
+            } finally {
+                connection.disconnect();
+            }
+        }
+
+        private byte[] readRemoteAsset(InputStream input) throws IOException {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[32 * 1024];
+            int total = 0;
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                total += read;
+                if (total > MAX_REMOTE_ASSET_BYTES) throw new IOException("Remote asset exceeds safety limit");
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        }
+
         private WebResourceResponse response(int status, String mime, InputStream stream) {
+            return response(status, mime, java.util.Collections.singletonMap("Cache-Control", "no-cache"), stream);
+        }
+
+        private WebResourceResponse response(int status, String mime, java.util.Map<String, String> headers, InputStream stream) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                return new WebResourceResponse(mime, "UTF-8", status, status == 200 ? "OK" : "Error", java.util.Collections.singletonMap("Cache-Control", "no-cache"), stream);
+                String encoding = mime.startsWith("text/") || mime.contains("javascript") || mime.contains("json") ? "UTF-8" : null;
+                return new WebResourceResponse(mime, encoding, status, status == 200 ? "OK" : "Error", headers, stream);
             }
             return new WebResourceResponse(mime, "UTF-8", stream);
         }

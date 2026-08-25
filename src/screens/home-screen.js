@@ -2,6 +2,7 @@ import { bottomNavigation, statusPill } from '../components/layout.js';
 import { icon } from '../components/icons.js';
 import { formatRelative } from '../utils/date.js';
 import { escapeHtml, truncate } from '../utils/text.js';
+import { templatePreviewMarkup } from '../components/template-preview.js';
 import { BUILT_IN_TEMPLATES } from '../models/templates.js';
 
 export async function renderHomeScreen(app, root) {
@@ -62,8 +63,8 @@ function permissionCard(iconName, label, state) {
 function templateCard(template) {
   const color = template.panel.accent;
   return `<button class="template-card" data-action="choose-template" data-template-id="${template.id}">
-    <div class="template-preview" style="--template-bg:${template.panel.background};--template-accent:${color};--template-fg:${template.panel.foreground}">
-      <span class="fake-map"><i></i></span><span class="fake-copy"><i></i><i></i><i></i></span>
+    <div class="template-preview" style="--panel:${template.panel.background};--accent:${color};--fg:${template.panel.foreground};--opacity:${template.panel.opacity}">
+      ${templatePreviewMarkup(template)}
     </div><strong>${escapeHtml(template.name)}</strong><small>${escapeHtml(template.description)}</small>
   </button>`;
 }

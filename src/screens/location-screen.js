@@ -17,6 +17,8 @@ export function renderLocationScreen(app, root, route) {
     selected: hasLocation,
     address: project.displayData.address || '',
     addressLines: project.displayData.addressLines || [],
+    placeName: project.displayData.placeName || '',
+    countryCode: project.displayData.countryCode || '',
   };
 
   root.innerHTML = `<main class="location-page">
@@ -119,6 +121,7 @@ export function renderLocationScreen(app, root, route) {
       if (result) {
         view.address = result.address;
         view.addressLines = result.addressLines;
+        view.placeName = result.placeName || '';
         addressInput.value = result.address;
       }
     } catch (error) {
@@ -171,6 +174,8 @@ export function renderLocationScreen(app, root, route) {
       longitude: view.longitude,
       address: addressInput.value.trim(),
       addressLines: splitAddress(addressInput.value),
+      placeName: view.placeName || splitAddress(addressInput.value)[1] || splitAddress(addressInput.value)[0] || '',
+      countryCode: view.countryCode || '',
       accuracy: view.accuracy ?? null,
       source: view.source ?? 'manual-map',
       zoom: view.zoom,

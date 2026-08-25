@@ -26,7 +26,18 @@ test('duplicating a project preserves source but creates a new identity', () => 
 
 test('schema v1 migrates without losing metadata', () => {
   const migrated = migrateProject({ schemaVersion: 1, id: 'legacy', originalData: metadata, displayData: metadata, template: { fields: {} } });
-  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.schemaVersion, 3);
   assert.ok(Array.isArray(migrated.texts));
   assert.equal(migrated.originalData.latitude, -8.28);
+  assert.equal(migrated.template.fields.place, true);
+  assert.equal(migrated.template.fields.accuracy, true);
+  assert.equal(migrated.template.fields.qr, false);
+});
+
+test('schema v2 projects migrate with complete display metadata and field controls', () => {
+  const migrated = migrateProject({ schemaVersion: 2, id: 'v2', originalData: metadata, displayData: metadata, template: { fields: { map: true, address: true } } });
+  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.displayData.placeName, '');
+  assert.equal(migrated.template.fields.altitude, true);
+  assert.equal(migrated.template.fields.speed, false);
 });

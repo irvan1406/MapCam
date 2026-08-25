@@ -31,18 +31,21 @@ export function formatDate(value, format = 'long-id') {
   return `${date.getDate()} ${MONTHS_ID[date.getMonth()]} ${year}`;
 }
 
-export function formatTime(value, format = '24-seconds', showTimeZone = true) {
+export function formatTime(value, format = '24-seconds', showTimeZone = true, timeZone = null) {
   const date = parseDateTime(value);
   const options = format === '12-hour'
     ? { hour: 'numeric', minute: '2-digit', hour12: true }
     : { hour: '2-digit', minute: '2-digit', second: format === '24-seconds' ? '2-digit' : undefined, hour12: false };
   let output = new Intl.DateTimeFormat(format === '12-hour' ? 'en-US' : 'id-ID', options).format(date);
-  if (showTimeZone) output += ` ${getTimeZoneLabel(date)}`;
+  if (showTimeZone) output += ` ${getTimeZoneLabel(date, timeZone)}`;
   return output;
 }
 
-export function getTimeZoneLabel(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('id-ID', { timeZoneName: 'short' }).formatToParts(date);
+export function getTimeZoneLabel(date = new Date(), timeZone = null) {
+  if (timeZone && !timeZone.includes('/')) return timeZone;
+  let parts;
+  try { parts = new Intl.DateTimeFormat('id-ID', { timeZone: timeZone || undefined, timeZoneName: 'short' }).formatToParts(date); }
+  catch { return timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local'; }
   const label = parts.find((part) => part.type === 'timeZoneName')?.value;
   return label || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 }

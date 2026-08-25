@@ -3,6 +3,7 @@ import { icon } from '../components/icons.js';
 import { confirmDialog, emptyState, showToast } from '../components/ui.js';
 import { BUILT_IN_TEMPLATES } from '../models/templates.js';
 import { escapeHtml } from '../utils/text.js';
+import { templatePreviewMarkup } from '../components/template-preview.js';
 
 export function renderTemplatesScreen(app, root) {
   const state = app.store.getState();
@@ -29,7 +30,7 @@ function largeTemplateCard(template, selectedId, custom = false) {
   const selected = selectedId === template.id;
   return `<button class="template-large-card ${selected ? 'is-selected' : ''}" data-template-select="${template.id}">
     <div class="template-large-preview" style="--panel:${template.panel.background};--accent:${template.panel.accent};--fg:${template.panel.foreground};--opacity:${template.panel.opacity}">
-      <div class="template-photo-pattern"></div><div class="template-mock-stamp ${template.layout.direction}"><span class="mock-map"><i></i></span><span class="mock-lines"><i></i><i></i><i></i><i></i></span></div>
+      <div class="template-photo-pattern"></div>${templatePreviewMarkup(template)}
       ${selected ? `<span class="selected-badge">${icon('check', 16)} Default</span>` : ''}
     </div><span class="template-large-copy"><strong>${escapeHtml(template.name)}</strong><small>${escapeHtml(template.description)}</small></span>
     ${custom ? `<span class="template-delete" data-template-delete="${template.id}" aria-label="Hapus preset">${icon('trash', 17)}</span>` : ''}

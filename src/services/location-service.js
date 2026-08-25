@@ -18,6 +18,27 @@ function normalizePosition(coords, source) {
   };
 }
 
+export function watchCurrentLocation(onUpdate, onError = () => {}, options = {}) {
+  const settings = { enableHighAccuracy: true, timeout: 22000, maximumAge: 3000, ...options };
+  if (navigator.geolocation?.watchPosition) {
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => onUpdate(normalizePosition(position.coords, 'device-gps')),
+      (error) => onError(friendlyLocationError(error)),
+      settings,
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }
+  let active = true;
+  let timer = null;
+  const poll = async () => {
+    try { if (active) onUpdate(await getCurrentLocation(settings)); }
+    catch (error) { if (active) onError(error); }
+    if (active) timer = setTimeout(poll, 12000);
+  };
+  poll();
+  return () => { active = false; clearTimeout(timer); };
+}
+
 export async function getCurrentLocation(options = {}) {
   const settings = {
     enableHighAccuracy: true,
@@ -165,9 +186,16 @@ function normalizeAddress(data) {
     .filter(Boolean)
     .filter((value, index, all) => all.indexOf(value) === index)
     .join(', ');
+  const placeName = [
+    address.city_district || address.suburb || address.village || address.town || address.city || address.county,
+    address.state,
+    address.country,
+  ].filter(Boolean).filter((value, index, all) => all.indexOf(value) === index).join(', ');
   return {
     address: data.display_name || [road, locality].filter(Boolean).join(', '),
     addressLines: [road, locality].filter(Boolean),
+    placeName: placeName || locality || road,
+    countryCode: String(address.country_code || '').toUpperCase(),
     rawAddress: address,
   };
 }

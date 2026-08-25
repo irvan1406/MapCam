@@ -7,7 +7,7 @@ import { normalizeSettings } from './models/settings.js';
 import { BUILT_IN_TEMPLATES, cloneTemplate } from './models/templates.js';
 import { EditorHistory } from './editor/history.js';
 import { readExif } from './services/exif-service.js';
-import { createThumbnailFromSource, loadImageSource } from './services/image-service.js';
+import { createThumbnailFromSource, fileToDataUrl, loadImageSource } from './services/image-service.js';
 import { getCurrentLocation, getPermissionSnapshot, reverseGeocode } from './services/location-service.js';
 import { selectCameraPhoto, selectGalleryPhotos } from './services/media-service.js';
 import { shareExport } from './services/export-service.js';
@@ -18,6 +18,7 @@ import { renderSettingsScreen } from './screens/settings-screen.js';
 import { renderEditorScreen } from './screens/editor-screen.js';
 import { renderLocationScreen } from './screens/location-screen.js';
 import { renderBatchScreen } from './screens/batch-screen.js';
+import { renderCameraScreen } from './screens/camera-screen.js';
 import { setGlobalBusy, showToast } from './components/ui.js';
 import { createId } from './utils/id.js';
 import { toLocalIso } from './utils/date.js';
@@ -36,6 +37,9 @@ class GPSMapCameraApp {
     this.currentRoute = null;
     this.renderNumber = 0;
     this.nativeReadyReported = false;
+    this.routeCleanup = null;
+    this.webUpdatePending = false;
+    this.updateCheckTimer = null;
   }
 
   async init() {
@@ -53,18 +57,25 @@ class GPSMapCameraApp {
       window.addEventListener('offline', () => this.handleConnectionChange(false));
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.flushAutoSaves(); });
       this.router.start();
+      this.startWebUpdateChecks();
     } catch (error) {
       console.error('[app] Inisialisasi gagal', error);
-      this.root.innerHTML = `<main class="fatal-error"><h1>Aplikasi tidak dapat dibuka</h1><p>${error.message}</p><button onclick="location.reload()">Coba Lagi</button></main>`;
+      this.root.innerHTML = `<main class="fatal-error"><h1>Aplikasi tidak dapat dibuka</h1><p>${error.message}</p><button id="app-reload">Coba Lagi</button></main>`;
+      this.root.querySelector('#app-reload')?.addEventListener('click', () => location.reload());
     } finally { setGlobalBusy(false); }
   }
 
   async renderRoute(route) {
     const renderNumber = ++this.renderNumber;
+    if (this.routeCleanup) {
+      try { this.routeCleanup(); } catch (error) { console.warn('[app] Route cleanup gagal', error); }
+      this.routeCleanup = null;
+    }
     this.currentRoute = route;
     this.cleanupObjectUrls();
     window.scrollTo({ top: 0, behavior: 'instant' });
     if (route.path === '/home') await renderHomeScreen(this, this.root);
+    else if (route.path === '/camera') await renderCameraScreen(this, this.root);
     else if (route.path === '/projects') await renderProjectsScreen(this, this.root);
     else if (route.path === '/templates') renderTemplatesScreen(this, this.root);
     else if (route.path === '/settings') await renderSettingsScreen(this, this.root);
@@ -73,6 +84,11 @@ class GPSMapCameraApp {
     else if (route.path === '/batch') await renderBatchScreen(this, this.root);
     else this.router.navigate('/home');
     if (renderNumber !== this.renderNumber) return;
+    if (this.webUpdatePending && route.path === '/home') {
+      await this.flushAutoSaves();
+      location.reload();
+      return;
+    }
     this.root.querySelector('main')?.focus?.({ preventScroll: true });
     if (!this.nativeReadyReported && route.path === '/home') {
       this.nativeReadyReported = true;
@@ -106,6 +122,10 @@ class GPSMapCameraApp {
   }
 
   async startCamera() {
+    this.router.navigate('/camera');
+  }
+
+  async startSystemCamera() {
     try {
       const [file] = await selectCameraPhoto();
       if (!file) return;
@@ -123,6 +143,8 @@ class GPSMapCameraApp {
         longitude: location?.longitude ?? null,
         address: location?.address ?? '',
         addressLines: location?.addressLines ?? [],
+        placeName: location?.placeName ?? '',
+        countryCode: location?.countryCode ?? '',
         accuracy: location?.accuracy ?? null,
         altitude: location?.altitude ?? null,
         speed: location?.speed ?? null,
@@ -140,6 +162,12 @@ class GPSMapCameraApp {
       console.error('[camera] Gagal', error);
       showToast(`Kamera gagal: ${error.message}`, { type: 'error', duration: 6000 });
     } finally { setGlobalBusy(false); }
+  }
+
+  async persistCameraOriginal(file) {
+    if (!globalThis.AndroidBridge?.saveOriginalImage) return;
+    try { globalThis.AndroidBridge.saveOriginalImage(await fileToDataUrl(file), file.name); }
+    catch (error) { console.warn('[camera] Foto asli tidak dapat disalin ke galeri', error); }
   }
 
   async startGallery() {
@@ -183,6 +211,8 @@ class GPSMapCameraApp {
       longitude: exif.longitude,
       address: address?.address ?? '',
       addressLines: address?.addressLines ?? [],
+      placeName: address?.placeName ?? '',
+      countryCode: address?.countryCode ?? '',
       altitude: exif.altitude,
       dateTime: exif.dateTime,
       orientation: exif.orientation,
@@ -215,7 +245,7 @@ class GPSMapCameraApp {
     const location = await getCurrentLocation({ enableHighAccuracy: true, timeout: 22000, maximumAge: 3000 });
     let address = null;
     if (navigator.onLine) address = await reverseGeocode(location.latitude, location.longitude).catch(() => null);
-    return { ...location, address: address?.address ?? '', addressLines: address?.addressLines ?? [] };
+    return { ...location, address: address?.address ?? '', addressLines: address?.addressLines ?? [], placeName: address?.placeName ?? '' };
   }
 
   async commitLocation(projectId, location) {
@@ -225,6 +255,8 @@ class GPSMapCameraApp {
     setDisplayField(project, 'longitude', Number(location.longitude));
     setDisplayField(project, 'address', location.address || '');
     setDisplayField(project, 'addressLines', location.addressLines || []);
+    setDisplayField(project, 'placeName', location.placeName || location.addressLines?.[1] || '');
+    setDisplayField(project, 'countryCode', location.countryCode || '');
     project.displayData.accuracy = location.accuracy ?? null;
     project.displayData.source = location.source || 'manual-map';
     project.map.zoom = location.zoom ?? project.map.zoom;
@@ -364,6 +396,11 @@ class GPSMapCameraApp {
   getEditorSaveChange(projectId) { return this.editorCallbacks.get(projectId)?.saveChange ?? (() => Promise.resolve()); }
   getEditorDrawPreview(projectId) { return this.editorCallbacks.get(projectId)?.drawPreview ?? (() => Promise.resolve()); }
   registerEditorCleanup(_projectId, cleanup) { this.editorCleanups.push(cleanup); }
+  setRouteCleanup(cleanup) { this.routeCleanup = cleanup; }
+  setNativeCameraMode(enabled) {
+    try { globalThis.AndroidBridge?.setCameraMode?.(Boolean(enabled)); }
+    catch (error) { console.warn('[android] Mode system bar kamera gagal', error); }
+  }
 
   cleanupObjectUrls() {
     for (const cleanup of this.editorCleanups.splice(0)) {
@@ -388,12 +425,40 @@ class GPSMapCameraApp {
 
   handleConnectionChange(online) {
     showToast(online ? 'Koneksi internet kembali.' : 'Mode offline: kamera dan editor tetap dapat digunakan.', { duration: 3500 });
+    if (online) this.checkForWebUpdate();
     if (this.currentRoute?.path === '/home') renderHomeScreen(this, this.root);
   }
 
+  startWebUpdateChecks() {
+    const check = () => this.checkForWebUpdate().catch((error) => console.warn('[update] Pemeriksaan web gagal', error));
+    setTimeout(check, 2500);
+    this.updateCheckTimer = setInterval(check, 5 * 60_000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+  }
+
+  async checkForWebUpdate() {
+    if (!navigator.onLine || this.webUpdatePending) return;
+    const response = await fetch(`./build-info.json?check=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const info = await response.json();
+    const currentBuildId = globalThis.__MAPCAM_BUILD_ID__;
+    if (!info.buildId || !currentBuildId || info.buildId === currentBuildId) return;
+    this.webUpdatePending = true;
+    const safeToReload = ['/home', '/projects', '/templates', '/settings'].includes(this.currentRoute?.path);
+    if (safeToReload) {
+      showToast('Pembaruan aplikasi ditemukan. Memuat versi terbaru…', { duration: 1800 });
+      await this.flushAutoSaves();
+      setTimeout(() => location.reload(), 700);
+    } else {
+      showToast('Pembaruan siap dan akan diterapkan setelah kembali ke halaman utama.', { duration: 5000 });
+    }
+  }
+
   registerServiceWorker() {
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-      navigator.serviceWorker.register('./service-worker.js').catch((error) => console.warn('[pwa] Service worker gagal', error));
+    if (!globalThis.AndroidBridge && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' })
+        .then((registration) => registration.update())
+        .catch((error) => console.warn('[pwa] Service worker gagal', error));
     }
   }
 }
@@ -402,7 +467,7 @@ function applyDefaultPosition(project, position) {
   if (position === 'bottom-right') { project.overlay.x = 0.04; project.template.layout.mapPosition = 'right'; }
   else if (position === 'top-left') { project.overlay.x = 0.04; project.overlay.y = 0.04; }
   else if (position === 'top-right') { project.overlay.x = 0.04; project.overlay.y = 0.04; project.template.layout.mapPosition = 'right'; }
-  else { project.overlay.x = 0.04; project.overlay.y = 0.69; }
+  else { project.overlay.x = 0.04; project.overlay.y = 0.72; }
 }
 
 const root = document.querySelector('#app');

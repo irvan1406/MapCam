@@ -29,6 +29,7 @@ android {
         versionName appConfig.app.versionName
         testInstrumentationRunner "android.test.InstrumentationTestRunner"
         buildConfigField "String", "APP_NAME", "\"${appConfig.app.name}\""
+        buildConfigField "String", "WEB_APP_URL", "\"${appConfig.web.updateUrl}\""
     }
 
     sourceSets {

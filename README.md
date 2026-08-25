@@ -4,22 +4,25 @@
 
 Aplikasi Android mobile-first untuk mengambil foto baru dengan GPS map stamp atau membuat versi GPS Map baru dari foto galeri. Data aktual/EXIF disimpan sebagai **Original Data**, sedangkan perubahan pengguna disimpan terpisah sebagai **Display Data**. Foto sumber tidak pernah ditimpa.
 
-Versi terbaru: **1.0.1** · Package: `id.irvan.gpsmapcamera` · Project schema: **v2**
+Versi terbaru: **1.1.0** · Package: `id.irvan.gpsmapcamera` · Project schema: **v3**
 
 ## Fitur yang berfungsi
 
-- Kamera Android, file picker galeri, multi-select, dan permission saat dibutuhkan.
+- Kamera live fullscreen di dalam aplikasi, layout portrait/landscape, kamera depan/belakang, torch bila tersedia, fallback kamera sistem, file picker galeri, multi-select, dan permission saat dibutuhkan.
+- GPS stamp realtime sebelum memotret: mini map, nama lokasi, alamat lengkap, koordinat, akurasi, altitude, speed, kompas, tanggal, jam, dan zona waktu.
 - GPS high accuracy, accuracy value, timeout/lock state, permission denied, dan lokasi manual.
 - Pembacaan JPEG EXIF lokal: `DateTimeOriginal`, GPS latitude/longitude, altitude, dan orientation.
 - Mini map dengan tile, pin, drag map, tap titik, zoom, pencarian, reverse geocoding, serta latitude/longitude manual.
 - Edit alamat, tanggal, jam, detik, zona waktu, dan beberapa format tampilan.
 - Original Data vs Display Data, edited flags, dan **Kembalikan ke Data Asli**.
 - Stamp editor: drag, resize, opacity, ukuran map/teks, alignment, warna, dan show/hide field.
-- Template bawaan serta preset custom, teks bebas yang dapat digeser, kegiatan, catatan, dan logo.
+- Template Lanjutan, Tanggal & Waktu, Pemindaian Lokasi dengan QR, Classic, Pelaporan/Check In, Kompas Navigasi, Minimal, Field Work, Dark, dan Transparent; tersedia juga preset custom.
+- QR lokasi dibuat lokal tanpa mengirim koordinat ke layanan generator QR dan selalu mengikuti **Display Location**.
+- Foto galeri tanpa GPS menawarkan aksi langsung **Lokasi Saat Ini** atau **Pilih di Peta**; aplikasi tidak mengarang koordinat.
 - Undo/redo, Original/Result comparison, autosave, resume draft, duplicate project, dan migration.
 - Export JPEG Maximum/High/Medium dari source resolusi tinggi, file baru, share, dan MediaStore Android.
 - Batch membaca metadata tiap foto secara individual dan export berurutan.
-- Light/dark mode, PWA shell offline, IndexedDB local storage, APK/AAB, dan GitHub Actions.
+- Light/dark mode, remote-web Android shell dengan fallback offline, PWA, IndexedDB local storage, APK/AAB, GitHub Pages, dan GitHub Actions.
 
 ## Teknologi
 
@@ -96,12 +99,24 @@ Keystore dan password tidak boleh masuk repository. `.gitignore` sudah mengecual
 
 ## GitHub Actions dan Releases
 
+### Update web tanpa build APK
+
+APK menjaga origin internal `https://app.local` agar IndexedDB dan project lama tetap terbaca. Native host mengambil file UI terbaru secara **network-first** dari URL `web.updateUrl` di `app.config.json`, lalu memakai web build yang dibundel di APK ketika GitHub Pages/internet tidak tersedia.
+
+Workflow `.github/workflows/web.yml` berjalan pada setiap push ke `main`, memvalidasi source, membangun `dist/`, lalu deploy ke GitHub Pages. Aplikasi memeriksa build terbaru saat dibuka, saat kembali online/aktif, dan berkala; update diterapkan otomatis pada halaman aman atau ditunda sampai pengguna keluar dari editor/kamera agar perubahan tidak hilang. Tidak perlu install APK baru. Perubahan Java Android, permission manifest, bridge native, package ID, atau URL shell tetap memerlukan APK baru.
+
+Workflow Android memakai path filter, sehingga perubahan biasa pada `src/` atau `public/` tidak membangun APK lagi. Build Android berjalan hanya saat file native/workflow Android berubah, saat dijalankan manual, atau saat tag release dibuat.
+
+> Update APK tanpa uninstall membutuhkan package ID yang sama dan signing key yang sama. Artifact debug dari runner CI berbeda dapat mempunyai debug key berbeda; gunakan signed release dan simpan keystore secara aman di GitHub Actions Secrets untuk jalur update native jangka panjang.
+
+### Build native dan release
+
 Workflow `.github/workflows/android.yml` melakukan:
 
 1. Checkout source.
 2. Setup Node 24, JDK 17, Gradle 9.5, dan Android SDK 37.
 3. `npm ci` lalu lint, test, dan web build.
-4. Build debug APK pada push/PR dan menyimpannya sebagai artifact.
+4. Build debug APK hanya ketika bagian native Android berubah dan menyimpannya sebagai artifact.
 5. Pada tag `vMAJOR.MINOR.PATCH`, validasi versi dan signing secrets.
 6. Build signed APK + AAB, checksum SHA-256, dan GitHub Release.
 
@@ -160,6 +175,7 @@ Arsitektur dan alur data lebih lengkap ada di [docs/ARCHITECTURE.md](docs/ARCHIT
 
 - nama app, package ID, version name/code, dan schema version;
 - feature flags;
+- URL update web untuk Android shell dan kebijakan fallback;
 - map providers, default zoom, serta batas zoom;
 - geocoding endpoint, bahasa, cache TTL, serta rate limit;
 - kualitas, batas megapixel, JPEG quality, dan pola nama export.
@@ -233,7 +249,7 @@ Foto galeri dibuka melalui system document picker. Izin tidak diminta pada start
 
 - Pastikan permission Kamera di Android Settings diizinkan.
 - Tutup aplikasi lain yang sedang memakai kamera.
-- Mode web harus berjalan pada HTTPS atau `localhost`; APK memakai native file chooser.
+- Mode web harus berjalan pada HTTPS atau `localhost`; APK memberi permission kamera ke preview WebView dan menyediakan fallback kamera sistem.
 
 ### GPS terus “Mencari lokasi”
 

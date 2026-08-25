@@ -9,10 +9,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://nominatim.openstreetmap.org; media-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'">
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icons/app-icon-192.svg">
-    <link rel="stylesheet" href="./src/styles.css">
+    <link rel="stylesheet" href="./src/styles.css?v=__BUILD_ID__">
     <title>GPS Map Camera</title>
   </head>
   <body>
@@ -24,6 +25,6 @@
         <span class="spinner"></span>
       </main>
     </div>
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./bootstrap.js?v=__BUILD_ID__"></script>
   </body>
 </html>

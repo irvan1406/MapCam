@@ -2,6 +2,25 @@
 
 Semua perubahan penting mengikuti [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-08-26
+
+### Added
+
+- Kamera live fullscreen dengan GPS, jam, alamat, dan mini map realtime sebelum foto diambil.
+- Layout kamera responsif khusus portrait dan landscape, kamera depan/belakang, serta torch jika hardware mendukung.
+- Field lengkap yang dapat ditampilkan/disembunyikan: nama lokasi, alamat lengkap, koordinat, akurasi, altitude, speed, kompas, tanggal, jam, dan zona waktu.
+- Template Lanjutan, Tanggal & Waktu, Pemindaian Lokasi dengan QR, Pelaporan/Check In, dan Kompas Navigasi yang mengikuti orientasi foto.
+- QR lokasi dibuat sepenuhnya di perangkat dan membuka koordinat Display Location di Maps saat dipindai.
+- Aksi cepat Lokasi Saat Ini atau Pilih di Peta untuk foto galeri yang tidak memiliki GPS EXIF.
+- GitHub Pages deployment serta Android remote-web shell dengan fallback offline tanpa memindahkan origin penyimpanan project.
+
+### Improved
+
+- GPS stamp Classic dibuat ringkas dan content-fit sehingga tidak lagi menyisakan panel kosong besar.
+- Preview template kamera kini benar-benar berubah sesuai desain yang dipilih sebelum tombol shutter ditekan.
+- Project Schema v3 memigrasikan project v1/v2 dan mempertahankan Original Data.
+- Perubahan web biasa tidak lagi memicu build APK; workflow Android hanya berjalan untuk perubahan native atau release.
+
 ## [1.0.1] - 2026-08-20
 
 ### Fixed

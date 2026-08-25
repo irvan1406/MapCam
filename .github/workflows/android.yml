@@ -4,8 +4,20 @@ on:
   push:
     branches: [main, develop, "feature/**", "fix/**"]
     tags: ["v*.*.*"]
+    paths:
+      - "android/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "scripts/android-smoke-test.sh"
+      - ".github/workflows/android.yml"
   pull_request:
     branches: [main, develop]
+    paths:
+      - "android/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "scripts/android-smoke-test.sh"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:

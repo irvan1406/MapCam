@@ -3,9 +3,9 @@ const FALLBACK_CONFIG = Object.freeze({
     name: 'GPS Map Camera',
     shortName: 'GPS Camera',
     packageId: 'id.irvan.gpsmapcamera',
-    versionName: '1.0.0',
-    versionCode: 1,
-    projectSchemaVersion: 2,
+    versionName: '1.1.0',
+    versionCode: 3,
+    projectSchemaVersion: 3,
   },
   features: {
     batchExport: true,
