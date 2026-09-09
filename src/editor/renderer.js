@@ -51,11 +51,22 @@ export function calculateStampBounds(project, canvasWidth, canvasHeight) {
   const variantRatio = { datetime: 0.26, qr: 0.27, report: 0.25, compass: 0.28, advanced: 0.25 }[variant];
   const rowRatio = variantRatio ?? Math.max(hasMap ? 0.22 : 0.12, Math.min(0.36, 0.1 + contentLines * 0.038));
   const estimatedRatio = isColumn ? 0.54 + Math.min(0.2, contentLines * 0.025) : rowRatio;
-  const maximumHeight = canvasHeight * (isColumn ? 0.52 : 0.34);
+  const rowHeightLimit = canvasWidth > canvasHeight ? 0.28 : 0.34;
+  const maximumHeight = canvasHeight * (isColumn ? 0.52 : rowHeightLimit);
   const height = Math.min(maximumHeight, Math.max(canvasHeight * 0.1, width * estimatedRatio));
-  const x = Math.min(canvasWidth - width, Math.max(0, canvasWidth * overlay.x));
-  const y = Math.min(canvasHeight - height, Math.max(0, canvasHeight * overlay.y));
+  const margin = Math.max(8, Math.min(canvasWidth, canvasHeight) * 0.032);
+  const anchored = anchoredPosition(overlay.anchor, canvasWidth, canvasHeight, width, height, margin);
+  const x = anchored ? anchored.x : Math.min(canvasWidth - width, Math.max(0, canvasWidth * overlay.x));
+  const y = anchored ? anchored.y : Math.min(canvasHeight - height, Math.max(0, canvasHeight * overlay.y));
   return { x, y, width, height };
+}
+
+function anchoredPosition(anchor, canvasWidth, canvasHeight, width, height, margin) {
+  if (anchor === 'bottom-left') return { x: margin, y: canvasHeight - height - margin };
+  if (anchor === 'bottom-right') return { x: canvasWidth - width - margin, y: canvasHeight - height - margin };
+  if (anchor === 'top-left') return { x: margin, y: margin };
+  if (anchor === 'top-right') return { x: canvasWidth - width - margin, y: margin };
+  return null;
 }
 
 async function drawStamp(context, project, bounds, options) {

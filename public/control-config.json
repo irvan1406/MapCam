@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "branding": {
+    "appName": "MapCam",
+    "headerTitle": "MapCam",
+    "tagline": "GPS Camera & Photo Editor",
+    "logoUrl": "./icons/app-icon.svg",
+    "logoDataUrl": "",
+    "accentColor": "#0ea5e9",
+    "statusLabel": "Siap"
+  },
+  "camera": {
+    "autoSaveStamped": true,
+    "keepCameraOpen": true,
+    "saveOriginalToGallery": false,
+    "autoLocationForGallery": true,
+    "captureQuality": "fast",
+    "showSaveConfirmation": true
+  },
+  "announcement": {
+    "enabled": false,
+    "id": "welcome-v1",
+    "title": "Informasi",
+    "message": "",
+    "frequency": "once",
+    "displayLimit": 1,
+    "buttonLabel": "Mengerti"
+  },
+  "admin": {
+    "background": "aurora"
+  }
+}

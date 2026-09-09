@@ -5,7 +5,7 @@
 3. Add the release notes to `CHANGELOG.md`.
 4. Run `npm run check` and build/test the debug APK.
 5. Commit with a descriptive Conventional Commit message.
-6. Create and push a matching tag, for example `v1.1.0`.
+6. Create and push a matching tag, for example `v1.2.0`.
 7. GitHub Actions validates the tag, signs the build, creates APK/AAB, writes SHA-256 hashes, and creates a GitHub Release.
 
 Required GitHub Actions secrets:

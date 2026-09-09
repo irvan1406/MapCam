@@ -1,13 +1,14 @@
 import { getConfig } from '../config/runtime-config.js';
 import { getGeoCache, setGeoCache } from '../storage/database.js';
-import { wait } from '../utils/async.js';
+import { fetchWithTimeout, wait } from '../utils/async.js';
 import { isValidCoordinate } from '../utils/geo.js';
 
 let lastGeocodeRequestAt = 0;
 let nativeRequest = null;
+let lastKnownLocation = null;
 
 function normalizePosition(coords, source) {
-  return {
+  const normalized = {
     latitude: Number(coords.latitude),
     longitude: Number(coords.longitude),
     accuracy: Number.isFinite(coords.accuracy) ? Number(coords.accuracy) : null,
@@ -15,7 +16,15 @@ function normalizePosition(coords, source) {
     speed: Number.isFinite(coords.speed) ? Number(coords.speed) : null,
     compass: Number.isFinite(coords.heading) ? Number(coords.heading) : null,
     source,
+    capturedAt: Date.now(),
   };
+  if (isValidCoordinate(normalized.latitude, normalized.longitude)) lastKnownLocation = normalized;
+  return normalized;
+}
+
+export function getCachedLocation(maximumAge = 60_000) {
+  if (!lastKnownLocation || Date.now() - lastKnownLocation.capturedAt > maximumAge) return null;
+  return structuredClone(lastKnownLocation);
 }
 
 export function watchCurrentLocation(onUpdate, onError = () => {}, options = {}) {
@@ -137,7 +146,7 @@ export async function reverseGeocode(latitude, longitude) {
   url.searchParams.set('zoom', '18');
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('accept-language', config.language);
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 6500);
   if (!response.ok) throw new Error(`Alamat gagal dimuat (HTTP ${response.status}).`);
   const data = await response.json();
   const result = normalizeAddress(data);
@@ -162,7 +171,7 @@ export async function searchPlaces(query) {
   url.searchParams.set('limit', '6');
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('accept-language', config.language);
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 6500);
   if (!response.ok) throw new Error(`Pencarian gagal (HTTP ${response.status}).`);
   const data = (await response.json()).map((item) => ({
     latitude: Number(item.lat),

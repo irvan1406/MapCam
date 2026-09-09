@@ -133,7 +133,7 @@ export async function renderEditorScreen(app, root, route) {
   root.querySelector('#export-photo').addEventListener('click', () => openExportSheet(app, project));
   root.querySelector('#share-editor').addEventListener('click', async () => {
     if (!project.lastExportBlob) return;
-    try { await shareExport({ blob: project.lastExportBlob, fileName: project.lastExportName || 'GPSMapCamera.jpg' }); }
+    try { await shareExport({ blob: project.lastExportBlob, fileName: project.lastExportName || 'MapCam.jpg' }); }
     catch (error) { showToast(error.message, { type: 'error' }); }
   });
 
@@ -361,7 +361,13 @@ function bindStageGestures(root, stage, project, saveChange, drawPreview) {
   hitbox.addEventListener('pointerdown', (event) => {
     if (event.target.closest('.resize-handle')) return;
     hitbox.setPointerCapture(event.pointerId);
-    gesture = { type: 'move', id: event.pointerId, startX: event.clientX, startY: event.clientY, x: project.overlay.x, y: project.overlay.y };
+    const stageRect = stage.getBoundingClientRect();
+    const hitboxRect = hitbox.getBoundingClientRect();
+    gesture = {
+      type: 'move', id: event.pointerId, startX: event.clientX, startY: event.clientY,
+      x: (hitboxRect.left - stageRect.left) / stageRect.width,
+      y: (hitboxRect.top - stageRect.top) / stageRect.height,
+    };
     hitbox.classList.add('is-moving');
   });
   const resizeHandle = hitbox.querySelector('.resize-handle');
@@ -375,6 +381,7 @@ function bindStageGestures(root, stage, project, saveChange, drawPreview) {
     if (!gesture || event.pointerId !== gesture.id) return;
     const rect = stage.getBoundingClientRect();
     if (gesture.type === 'move') {
+      project.overlay.anchor = 'free';
       project.overlay.x = clamp(gesture.x + (event.clientX - gesture.startX) / rect.width, 0, 1 - project.overlay.width);
       project.overlay.y = clamp(gesture.y + (event.clientY - gesture.startY) / rect.height, 0, 0.9);
       hitbox.style.left = `${project.overlay.x * 100}%`;

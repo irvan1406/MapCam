@@ -21,7 +21,7 @@ test('classic GPS stamp stays compact on portrait and landscape photos', () => {
   const portrait = calculateStampBounds(project, 1080, 1920);
   const landscape = calculateStampBounds(project, 1920, 1080);
   assert.ok(portrait.height <= 1920 * 0.34);
-  assert.ok(landscape.height <= 1080 * 0.34);
+  assert.ok(landscape.height <= 1080 * 0.28);
   assert.ok(portrait.height < portrait.width * 0.4);
   assert.ok(landscape.height < landscape.width * 0.4);
 });
@@ -38,4 +38,15 @@ test('reference templates stay landscape-shaped inside portrait photos', () => {
     assert.ok(bounds.width > bounds.height * 2.5, `${templateId} harus tetap horizontal`);
     assert.ok(bounds.height <= 1920 * 0.34, `${templateId} terlalu tinggi`);
   }
+});
+
+test('new projects stay precisely anchored in portrait and landscape output', () => {
+  const project = createProject({ sourceType: 'camera', file: new Blob(['photo']), metadata, settings: DEFAULT_SETTINGS });
+  const portrait = calculateStampBounds(project, 1080, 1920);
+  const landscape = calculateStampBounds(project, 1920, 1080);
+  assert.ok(Math.abs(portrait.x - 1080 * 0.032) < 1);
+  assert.ok(Math.abs(1920 - portrait.y - portrait.height - 1080 * 0.032) < 1);
+  assert.ok(Math.abs(landscape.x - 1080 * 0.032) < 1);
+  assert.ok(Math.abs(1080 - landscape.y - landscape.height - 1080 * 0.032) < 1);
+  assert.ok(landscape.height <= 1080 * 0.28);
 });

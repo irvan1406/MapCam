@@ -1,16 +1,16 @@
 import { loadRuntimeConfig, getConfig } from './config/runtime-config.js';
 import { createStore } from './core/store.js';
 import { Router } from './core/router.js';
-import { loadSettings, saveSettings, listProjects, saveProject, getProject, deleteProject, listCustomTemplates, saveCustomTemplate, deleteCustomTemplate } from './storage/database.js';
+import { loadSettings, saveSettings, listProjects, saveProject, getProject, deleteProject, listCustomTemplates, saveCustomTemplate, deleteCustomTemplate, saveLocalControlConfig, clearLocalControlConfig, loadAnnouncementState, saveAnnouncementState } from './storage/database.js';
 import { createProject, duplicateProject as cloneProject, setDisplayField } from './models/project.js';
 import { normalizeSettings } from './models/settings.js';
 import { BUILT_IN_TEMPLATES, cloneTemplate } from './models/templates.js';
 import { EditorHistory } from './editor/history.js';
 import { readExif } from './services/exif-service.js';
 import { createThumbnailFromSource, fileToDataUrl, loadImageSource } from './services/image-service.js';
-import { getCurrentLocation, getPermissionSnapshot, reverseGeocode } from './services/location-service.js';
+import { getCachedLocation, getCurrentLocation, getPermissionSnapshot, reverseGeocode } from './services/location-service.js';
 import { selectCameraPhoto, selectGalleryPhotos } from './services/media-service.js';
-import { shareExport } from './services/export-service.js';
+import { createExport, saveExport, shareExport } from './services/export-service.js';
 import { renderHomeScreen } from './screens/home-screen.js';
 import { renderProjectsScreen } from './screens/projects-screen.js';
 import { renderTemplatesScreen } from './screens/templates-screen.js';
@@ -19,14 +19,19 @@ import { renderEditorScreen } from './screens/editor-screen.js';
 import { renderLocationScreen } from './screens/location-screen.js';
 import { renderBatchScreen } from './screens/batch-screen.js';
 import { renderCameraScreen } from './screens/camera-screen.js';
-import { setGlobalBusy, showToast } from './components/ui.js';
+import { renderAdminScreen } from './screens/admin-screen.js';
+import { noticeDialog, setGlobalBusy, showToast } from './components/ui.js';
 import { createId } from './utils/id.js';
 import { toLocalIso } from './utils/date.js';
+import { loadControlConfig, setEffectiveControlConfig, clearEffectiveControlOverride, getControlConfigSnapshot } from './config/control-config.js';
+import { brandMarkMarkup, setActiveBranding } from './components/brand.js';
+import { isValidCoordinate } from './utils/geo.js';
+import { fetchWithTimeout } from './utils/async.js';
 
 class GPSMapCameraApp {
   constructor(root) {
     this.root = root;
-    this.store = createStore({ settings: normalizeSettings(), projects: [], customTemplates: [], permissions: { camera: 'prompt', location: 'prompt', storage: 'available' } });
+    this.store = createStore({ settings: normalizeSettings(), projects: [], customTemplates: [], controlConfig: null, permissions: { camera: 'prompt', location: 'prompt', storage: 'available' } });
     this.router = new Router((route) => this.renderRoute(route));
     this.histories = new Map();
     this.editorUi = new Map();
@@ -40,24 +45,42 @@ class GPSMapCameraApp {
     this.routeCleanup = null;
     this.webUpdatePending = false;
     this.updateCheckTimer = null;
+    this.announcementState = { id: '', count: 0, lastShownAt: null };
+    this.announcementVisible = false;
+    this.lastAnnouncementCheckAt = 0;
+    this.appHiddenAt = 0;
+    this.captureQueue = Promise.resolve();
+    this.pendingCaptures = 0;
+    this.projectsFullyLoaded = false;
   }
 
   async init() {
-    setGlobalBusy(true, 'Membuka GPS Map Camera…');
+    setGlobalBusy(true, 'Membuka MapCam…');
     try {
       await loadRuntimeConfig();
-      const [settings, projects, customTemplates, permissions] = await Promise.all([
-        loadSettings(), listProjects(), listCustomTemplates(), getPermissionSnapshot(),
+      const [settings, projects, customTemplates, permissions, controlSnapshot, announcementState] = await Promise.all([
+        loadSettings(), listProjects({ limit: 12 }), listCustomTemplates(), getPermissionSnapshot(), loadControlConfig(), loadAnnouncementState(),
       ]);
-      this.store.setState({ settings, projects, customTemplates, permissions }, 'init');
+      this.announcementState = announcementState;
+      this.store.setState({ settings, projects, customTemplates, permissions, controlConfig: controlSnapshot.effective }, 'init');
+      this.applyBranding(controlSnapshot.effective.branding);
       this.applyTheme(settings.theme);
       this.bindGlobalActions();
       this.registerServiceWorker();
       window.addEventListener('online', () => this.handleConnectionChange(true));
       window.addEventListener('offline', () => this.handleConnectionChange(false));
-      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.flushAutoSaves(); });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.appHiddenAt = Date.now();
+          this.flushAutoSaves();
+        } else if (this.appHiddenAt && Date.now() - this.appHiddenAt > 1000) {
+          this.appHiddenAt = 0;
+          this.maybeShowOpeningAnnouncement();
+        }
+      });
       this.router.start();
       this.startWebUpdateChecks();
+      setTimeout(() => this.maybeShowOpeningAnnouncement(), 280);
     } catch (error) {
       console.error('[app] Inisialisasi gagal', error);
       this.root.innerHTML = `<main class="fatal-error"><h1>Aplikasi tidak dapat dibuka</h1><p>${error.message}</p><button id="app-reload">Coba Lagi</button></main>`;
@@ -76,12 +99,13 @@ class GPSMapCameraApp {
     window.scrollTo({ top: 0, behavior: 'instant' });
     if (route.path === '/home') await renderHomeScreen(this, this.root);
     else if (route.path === '/camera') await renderCameraScreen(this, this.root);
-    else if (route.path === '/projects') await renderProjectsScreen(this, this.root);
+    else if (route.path === '/projects') { await this.ensureAllProjectsLoaded(); await renderProjectsScreen(this, this.root); }
     else if (route.path === '/templates') renderTemplatesScreen(this, this.root);
     else if (route.path === '/settings') await renderSettingsScreen(this, this.root);
     else if (route.path === '/editor') await renderEditorScreen(this, this.root, route);
     else if (route.path === '/location') renderLocationScreen(this, this.root, route);
     else if (route.path === '/batch') await renderBatchScreen(this, this.root);
+    else if (route.path === '/admin') await renderAdminScreen(this, this.root);
     else this.router.navigate('/home');
     if (renderNumber !== this.renderNumber) return;
     if (this.webUpdatePending && route.path === '/home') {
@@ -170,6 +194,65 @@ class GPSMapCameraApp {
     catch (error) { console.warn('[camera] Foto asli tidak dapat disalin ke galeri', error); }
   }
 
+  enqueueCameraCapture({ file, metadata, template, dimensions, onStatus = () => {} }) {
+    this.pendingCaptures += 1;
+    onStatus({ state: 'queued', pending: this.pendingCaptures });
+    const preparedProject = this.createAndSaveProject('camera', file, metadata, {
+      template,
+      dimensions,
+      deferThumbnail: true,
+    });
+    const process = async () => {
+      onStatus({ state: 'processing', pending: this.pendingCaptures });
+      let project = null;
+      try {
+        const control = this.getControlConfig().camera;
+        project = await preparedProject;
+        const completedMetadata = await this.completeCaptureMetadata(metadata);
+        for (const [field, value] of Object.entries(completedMetadata)) {
+          const originalMissing = project.originalData[field] == null || project.originalData[field] === ''
+            || (Array.isArray(project.originalData[field]) && project.originalData[field].length === 0);
+          if (originalMissing && value != null && value !== '') project.originalData[field] = structuredClone(value);
+          if (!project.editedFields[field] && originalMissing && value != null && value !== '') project.displayData[field] = structuredClone(value);
+        }
+        await this.saveProjectNow(project);
+        if (control.saveOriginalToGallery) this.persistCameraOriginal(file);
+        if (control.autoSaveStamped) {
+          const exported = await createExport(project, control.captureQuality);
+          await saveExport(exported);
+          await this.recordExport(project.id, exported);
+        }
+        this.createDeferredThumbnail(project).catch((error) => console.warn('[camera] Thumbnail tertunda gagal', error));
+        if (control.showSaveConfirmation) {
+          showToast(control.autoSaveStamped ? 'Foto bertag tersimpan ke galeri dan project.' : 'Foto tersimpan sebagai project.', { duration: 3300 });
+        }
+        onStatus({ state: 'saved', pending: Math.max(0, this.pendingCaptures - 1), project });
+        return project;
+      } catch (error) {
+        console.error('[camera] Penyimpanan latar belakang gagal', error);
+        showToast(project ? `Project tersimpan, tetapi galeri gagal: ${error.message}` : `Foto gagal disimpan: ${error.message}`, { type: 'error', duration: 6000 });
+        onStatus({ state: 'error', pending: Math.max(0, this.pendingCaptures - 1), error, project });
+        return project;
+      } finally { this.pendingCaptures = Math.max(0, this.pendingCaptures - 1); }
+    };
+    const result = this.captureQueue.then(process, process);
+    this.captureQueue = result.catch(() => null);
+    return result;
+  }
+
+  async completeCaptureMetadata(metadata) {
+    const completed = structuredClone(metadata);
+    if (!isValidCoordinate(completed.latitude, completed.longitude)) {
+      const cached = getCachedLocation(90_000);
+      if (cached) Object.assign(completed, cached);
+    }
+    if (isValidCoordinate(completed.latitude, completed.longitude) && !completed.address && navigator.onLine) {
+      const address = await reverseGeocode(completed.latitude, completed.longitude).catch(() => null);
+      if (address) Object.assign(completed, address);
+    }
+    return completed;
+  }
+
   async startGallery() {
     try {
       const files = (await selectGalleryPhotos({ multiple: true })).slice(0, 50);
@@ -222,23 +305,72 @@ class GPSMapCameraApp {
       fileLastModified: exif.fileLastModified,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
-    return this.createAndSaveProject('gallery', file, metadata);
+    const project = await this.createAndSaveProject('gallery', file, metadata);
+    let displayUpdated = false;
+    if (!exif.dateTime) {
+      setDisplayField(project, 'dateTime', toLocalIso());
+      project.displayData.dateSource = 'current-time';
+      displayUpdated = true;
+    }
+    if (!isValidCoordinate(exif.latitude, exif.longitude) && this.getControlConfig().camera.autoLocationForGallery) {
+      const current = getCachedLocation(90_000) ?? await getCurrentLocation({ timeout: 8000, maximumAge: 90_000 }).catch(() => null);
+      if (current) {
+        const currentAddress = navigator.onLine
+          ? await reverseGeocode(current.latitude, current.longitude).catch(() => null)
+          : null;
+        setDisplayField(project, 'latitude', current.latitude);
+        setDisplayField(project, 'longitude', current.longitude);
+        setDisplayField(project, 'accuracy', current.accuracy);
+        setDisplayField(project, 'altitude', current.altitude);
+        setDisplayField(project, 'speed', current.speed);
+        setDisplayField(project, 'compass', current.compass);
+        setDisplayField(project, 'address', currentAddress?.address ?? '');
+        setDisplayField(project, 'addressLines', currentAddress?.addressLines ?? []);
+        setDisplayField(project, 'placeName', currentAddress?.placeName ?? '');
+        setDisplayField(project, 'countryCode', currentAddress?.countryCode ?? '');
+        project.displayData.source = current.source || 'device-gps';
+        displayUpdated = true;
+      }
+    }
+    if (displayUpdated) await this.saveProjectNow(project);
+    return project;
   }
 
-  async createAndSaveProject(sourceType, file, metadata) {
+  async createAndSaveProject(sourceType, file, metadata, options = {}) {
     const state = this.store.getState();
     const project = createProject({ sourceType, file, metadata, settings: state.settings, customTemplates: state.customTemplates });
     project.overlay.mapScale = state.settings.mapSize === 'small' ? 0.78 : state.settings.mapSize === 'large' ? 1.25 : 1;
-    const source = await loadImageSource(file);
-    project.sourceWidth = source.width;
-    project.sourceHeight = source.height;
-    project.thumbnailBlob = await createThumbnailFromSource(source).catch(() => null);
-    URL.revokeObjectURL(source.url);
+    if (options.template) {
+      project.templateId = options.template.id;
+      project.template = cloneTemplate(options.template);
+    }
+    if (Number.isFinite(options.dimensions?.width) && Number.isFinite(options.dimensions?.height)) {
+      project.sourceWidth = options.dimensions.width;
+      project.sourceHeight = options.dimensions.height;
+    }
+    if (!options.deferThumbnail || !project.sourceWidth || !project.sourceHeight) {
+      const source = await loadImageSource(file);
+      project.sourceWidth = source.width;
+      project.sourceHeight = source.height;
+      if (!options.deferThumbnail) project.thumbnailBlob = await createThumbnailFromSource(source).catch(() => null);
+      URL.revokeObjectURL(source.url);
+    }
     applyDefaultPosition(project, state.settings.stampPosition);
     project.appVersion = getConfig().app.versionName;
     await saveProject(project);
     this.store.setState((current) => ({ ...current, projects: [project, ...current.projects.filter((item) => item.id !== project.id)] }), 'project-created');
     return project;
+  }
+
+  async createDeferredThumbnail(project) {
+    if (!project?.sourceBlob || project.thumbnailBlob) return;
+    const source = await loadImageSource(project.sourceBlob);
+    try {
+      project.sourceWidth = source.width;
+      project.sourceHeight = source.height;
+      project.thumbnailBlob = await createThumbnailFromSource(source);
+      await this.saveProjectNow(project);
+    } finally { URL.revokeObjectURL(source.url); }
   }
 
   async acquireLocationWithAddress() {
@@ -276,6 +408,13 @@ class GPSMapCameraApp {
 
   getProjectFromState(projectId) {
     return this.store.getState().projects.find((project) => project.id === projectId) ?? null;
+  }
+
+  async ensureAllProjectsLoaded() {
+    if (this.projectsFullyLoaded) return;
+    const projects = await listProjects();
+    this.projectsFullyLoaded = true;
+    this.store.setState((state) => ({ ...state, projects }), 'projects-loaded');
   }
 
   async duplicateProject(projectId) {
@@ -340,7 +479,7 @@ class GPSMapCameraApp {
   async shareLastExport(projectId) {
     const project = this.getProjectFromState(projectId);
     if (!project?.lastExportBlob) return showToast('Project belum mempunyai hasil export.', { type: 'error' });
-    try { await shareExport({ blob: project.lastExportBlob, fileName: project.lastExportName || 'GPSMapCamera.jpg' }); }
+    try { await shareExport({ blob: project.lastExportBlob, fileName: project.lastExportName || 'MapCam.jpg' }); }
     catch (error) { showToast(error.message, { type: 'error' }); }
   }
 
@@ -349,6 +488,61 @@ class GPSMapCameraApp {
     await saveSettings(settings);
     this.store.setState((state) => ({ ...state, settings }), 'settings');
     if (key === 'theme') this.applyTheme(value);
+  }
+
+  getControlConfig() {
+    return this.store.getState().controlConfig ?? getControlConfigSnapshot().effective;
+  }
+
+  getControlConfigSnapshot() {
+    return getControlConfigSnapshot();
+  }
+
+  async updateControlConfig(config) {
+    const saved = await saveLocalControlConfig(config);
+    const snapshot = setEffectiveControlConfig(saved, true);
+    this.store.setState((state) => ({ ...state, controlConfig: snapshot.effective }), 'control-config');
+    this.applyBranding(snapshot.effective.branding);
+    return snapshot.effective;
+  }
+
+  async resetControlConfig() {
+    await clearLocalControlConfig();
+    const snapshot = clearEffectiveControlOverride();
+    this.store.setState((state) => ({ ...state, controlConfig: snapshot.effective }), 'control-config-reset');
+    this.applyBranding(snapshot.effective.branding);
+    return snapshot.effective;
+  }
+
+  previewAnnouncement(announcement = this.getControlConfig().announcement) {
+    return noticeDialog({
+      title: announcement.title || 'Informasi',
+      message: announcement.message || 'Isi catatan belum diisi.',
+      buttonLabel: announcement.buttonLabel || 'Mengerti',
+      logoMarkup: brandMarkMarkup({ className: 'notice-brand-mark' }),
+    });
+  }
+
+  async maybeShowOpeningAnnouncement() {
+    const announcement = this.getControlConfig()?.announcement;
+    if (!announcement?.enabled || !announcement.message) return;
+    const now = Date.now();
+    if (this.announcementVisible || now - this.lastAnnouncementCheckAt < 2000) return;
+    this.lastAnnouncementCheckAt = now;
+    const previous = this.announcementState.id === announcement.id
+      ? this.announcementState
+      : { id: announcement.id, count: 0, lastShownAt: null };
+    const shouldShow = announcement.frequency === 'every-open'
+      || (announcement.frequency === 'limited' ? previous.count < announcement.displayLimit : previous.count === 0);
+    if (!shouldShow) return;
+    this.announcementState = await saveAnnouncementState({
+      id: announcement.id,
+      count: previous.count + 1,
+      lastShownAt: new Date().toISOString(),
+    }).catch(() => ({ ...previous, count: previous.count + 1 }));
+    this.announcementVisible = true;
+    try { await this.previewAnnouncement(announcement); }
+    finally { this.announcementVisible = false; }
   }
 
   async setDefaultTemplate(templateId) {
@@ -423,6 +617,15 @@ class GPSMapCameraApp {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#08111f' : '#f4f8fc');
   }
 
+  applyBranding(branding) {
+    const active = setActiveBranding(branding);
+    document.title = active.appName;
+    document.documentElement.style.setProperty('--primary', active.accentColor);
+    document.documentElement.style.setProperty('--primary-dark', active.accentColor);
+    document.documentElement.style.setProperty('--primary-soft', `color-mix(in srgb, ${active.accentColor} 14%, var(--surface))`);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', active.accentColor);
+  }
+
   handleConnectionChange(online) {
     showToast(online ? 'Koneksi internet kembali.' : 'Mode offline: kamera dan editor tetap dapat digunakan.', { duration: 3500 });
     if (online) this.checkForWebUpdate();
@@ -438,7 +641,7 @@ class GPSMapCameraApp {
 
   async checkForWebUpdate() {
     if (!navigator.onLine || this.webUpdatePending) return;
-    const response = await fetch(`./build-info.json?check=${Date.now()}`, { cache: 'no-store' });
+    const response = await fetchWithTimeout(`./build-info.json?check=${Date.now()}`, { cache: 'no-store' }, 3500);
     if (!response.ok) return;
     const info = await response.json();
     const currentBuildId = globalThis.__MAPCAM_BUILD_ID__;
@@ -464,10 +667,9 @@ class GPSMapCameraApp {
 }
 
 function applyDefaultPosition(project, position) {
-  if (position === 'bottom-right') { project.overlay.x = 0.04; project.template.layout.mapPosition = 'right'; }
-  else if (position === 'top-left') { project.overlay.x = 0.04; project.overlay.y = 0.04; }
-  else if (position === 'top-right') { project.overlay.x = 0.04; project.overlay.y = 0.04; project.template.layout.mapPosition = 'right'; }
-  else { project.overlay.x = 0.04; project.overlay.y = 0.72; }
+  project.overlay.anchor = ['bottom-left', 'bottom-right', 'top-left', 'top-right'].includes(position) ? position : 'bottom-left';
+  if (position === 'bottom-right' || position === 'top-right') project.template.layout.mapPosition = 'right';
+  else if (project.template.layout.direction !== 'column') project.template.layout.mapPosition = 'left';
 }
 
 const root = document.querySelector('#app');

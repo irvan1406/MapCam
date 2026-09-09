@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   stampPosition: 'bottom-left',
   mapSize: 'medium',
   exportQuality: 'high',
-  fileNamePattern: 'GPSMapCamera-{date}-{time}',
+  fileNamePattern: 'MapCam-{date}-{time}',
   showAddress: true,
   showCoordinates: true,
   autoSave: true,
@@ -19,5 +19,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 export function normalizeSettings(value = {}) {
-  return { ...DEFAULT_SETTINGS, ...value };
+  const normalized = { ...DEFAULT_SETTINGS, ...value };
+  if (normalized.fileNamePattern === 'GPSMapCamera-{date}-{time}') normalized.fileNamePattern = DEFAULT_SETTINGS.fileNamePattern;
+  return normalized;
 }

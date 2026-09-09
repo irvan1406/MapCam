@@ -15,7 +15,7 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     let pathname = decodeURIComponent(url.pathname);
     if (pathname === '/' || pathname === '/index.html') pathname = '/public/index.html';
-    else if (pathname === '/manifest.webmanifest' || pathname === '/service-worker.js' || pathname.startsWith('/icons/')) pathname = `/public${pathname}`;
+    else if (pathname === '/manifest.webmanifest' || pathname === '/service-worker.js' || pathname === '/control-config.json' || pathname.startsWith('/icons/')) pathname = `/public${pathname}`;
     else if (pathname === '/app.config.json') pathname = '/app.config.json';
     const candidate = normalize(join(root, pathname));
     if (!candidate.startsWith(root)) throw new Error('Invalid path');
@@ -29,4 +29,4 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, '0.0.0.0', () => console.log(`GPS Map Camera dev server: http://localhost:${port}`));
+server.listen(port, '0.0.0.0', () => console.log(`MapCam dev server: http://localhost:${port}`));

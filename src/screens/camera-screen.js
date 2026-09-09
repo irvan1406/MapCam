@@ -1,11 +1,11 @@
 import { icon } from '../components/icons.js';
-import { openSheet, setGlobalBusy, showToast } from '../components/ui.js';
+import { openSheet, showToast } from '../components/ui.js';
 import { cloneTemplate } from '../models/templates.js';
 import { openLiveCamera, attachCameraPreview, captureCameraPhoto, setCameraTorch, cameraBlobToFile } from '../services/camera-service.js';
 import { reverseGeocode, watchCurrentLocation } from '../services/location-service.js';
 import { renderDomMap } from '../services/map-service.js';
 import { formatDate, formatTime, toLocalIso } from '../utils/date.js';
-import { formatCoordinate, isValidCoordinate } from '../utils/geo.js';
+import { formatCoordinate } from '../utils/geo.js';
 import { escapeHtml } from '../utils/text.js';
 import { createLocationQrValue, renderQrSvg } from '../utils/qr-code.js';
 
@@ -24,6 +24,9 @@ export async function renderCameraScreen(app, root) {
   let destroyed = false;
   let locationSequence = 0;
   let lastGeocodeKey = '';
+  let lastGeocodeAt = 0;
+  let lastMapKey = '';
+  let lastMapAt = 0;
   let lastQrValue = null;
   let lastQrMarkup = '';
   const liveData = {
@@ -44,6 +47,8 @@ export async function renderCameraScreen(app, root) {
       </div>
     </header>
     <div class="camera-gps-status searching" id="camera-gps-status"><span class="camera-status-dot"></span><span>Mencari lokasi GPS…</span></div>
+    <div class="camera-save-status" id="camera-save-status" hidden><span class="spinner small"></span><span>Menyimpan di latar belakang…</span></div>
+    <div class="camera-capture-flash" id="camera-capture-flash"></div>
     <section class="live-gps-stamp" id="live-gps-stamp" aria-label="GPS stamp realtime">
       <div class="live-compass" id="live-camera-compass" hidden></div>
       <div class="live-map" id="live-camera-map"></div>
@@ -74,6 +79,8 @@ export async function renderCameraScreen(app, root) {
   const shutter = root.querySelector('#camera-shutter');
   const flashButton = root.querySelector('#camera-flash');
   const errorPanel = root.querySelector('#camera-error');
+  const saveStatus = root.querySelector('#camera-save-status');
+  const captureFlash = root.querySelector('#camera-capture-flash');
 
   const updateStamp = ({ refreshMap = false } = {}) => {
     if (destroyed) return;
@@ -142,11 +149,35 @@ export async function renderCameraScreen(app, root) {
     gpsStatus.querySelector('span:last-child').textContent = message;
   };
 
+  let saveStatusTimer = null;
+  const updateSaveStatus = ({ state: captureState, pending = 0 }) => {
+    if (destroyed) return;
+    clearTimeout(saveStatusTimer);
+    saveStatus.hidden = false;
+    saveStatus.className = `camera-save-status ${captureState}`;
+    const label = saveStatus.querySelector('span:last-child');
+    const spinner = saveStatus.querySelector('.spinner');
+    if (captureState === 'saved') {
+      spinner.hidden = true;
+      label.textContent = pending ? `Tersimpan • ${pending} foto menunggu` : 'Tersimpan ke galeri & project';
+      saveStatusTimer = setTimeout(() => { if (!destroyed) saveStatus.hidden = true; }, 2200);
+    } else if (captureState === 'error') {
+      spinner.hidden = true;
+      label.textContent = 'Periksa notifikasi penyimpanan';
+      saveStatusTimer = setTimeout(() => { if (!destroyed) saveStatus.hidden = true; }, 3200);
+    } else {
+      spinner.hidden = false;
+      label.textContent = pending > 1 ? `Menyimpan ${pending} foto di latar belakang…` : 'Menyimpan di latar belakang…';
+    }
+  };
+
   const enrichAddress = async (latitude, longitude) => {
     if (!navigator.onLine) return;
-    const key = `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
-    if (key === lastGeocodeKey) return;
+    const key = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+    const now = Date.now();
+    if (key === lastGeocodeKey || (lastGeocodeAt && now - lastGeocodeAt < 15_000)) return;
     lastGeocodeKey = key;
+    lastGeocodeAt = now;
     const sequence = ++locationSequence;
     const address = await reverseGeocode(latitude, longitude).catch((error) => {
       console.warn('[camera] Alamat realtime gagal dimuat', error);
@@ -161,7 +192,11 @@ export async function renderCameraScreen(app, root) {
     Object.assign(liveData, location);
     liveData.source = location.source || 'device-gps';
     setGpsStatus(Number.isFinite(location.accuracy) ? `GPS aktif • akurasi ±${Math.round(location.accuracy)} m` : 'GPS aktif', 'ready');
-    updateStamp({ refreshMap: true });
+    const now = Date.now();
+    const mapKey = `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
+    const refreshMap = !lastMapKey || (mapKey !== lastMapKey && now - lastMapAt >= 3000);
+    if (refreshMap) { lastMapKey = mapKey; lastMapAt = now; }
+    updateStamp({ refreshMap });
     enrichAddress(location.latitude, location.longitude);
   };
 
@@ -206,6 +241,7 @@ export async function renderCameraScreen(app, root) {
     if (destroyed) return;
     destroyed = true;
     clearInterval(clockTimer);
+    clearTimeout(saveStatusTimer);
     stopWatchingLocation?.();
     window.removeEventListener('deviceorientationabsolute', orientationHandler);
     window.removeEventListener('deviceorientation', orientationHandler);
@@ -251,28 +287,35 @@ export async function renderCameraScreen(app, root) {
     const capturedAt = new Date();
     liveData.dateTime = toLocalIso(capturedAt);
     try {
-      setGlobalBusy(true, 'Mengambil foto resolusi tinggi…');
       const blob = await captureCameraPhoto(video, session);
-      if (isValidCoordinate(liveData.latitude, liveData.longitude) && navigator.onLine) {
-        const address = await reverseGeocode(liveData.latitude, liveData.longitude).catch(() => null);
-        if (address) Object.assign(liveData, address);
-      }
       const file = cameraBlobToFile(blob, capturedAt);
-      app.persistCameraOriginal(file);
       const metadata = { ...structuredClone(liveData), dateTime: toLocalIso(capturedAt), orientation: 1, source: liveData.source || 'camera-live' };
-      const project = await app.createAndSaveProject('camera', file, metadata);
-      project.templateId = template.id;
-      project.template = cloneTemplate(template);
-      await app.saveProjectNow(project);
-      cleanup();
-      app.router.navigate(`/editor?id=${project.id}`);
+      const dimensions = {
+        width: Number(session.settings?.width) || video.videoWidth || null,
+        height: Number(session.settings?.height) || video.videoHeight || null,
+      };
+      captureFlash.classList.remove('is-visible');
+      requestAnimationFrame(() => {
+        captureFlash.classList.add('is-visible');
+        setTimeout(() => captureFlash.classList.remove('is-visible'), 110);
+      });
+      const processing = app.enqueueCameraCapture({ file, metadata, template: cloneTemplate(template), dimensions, onStatus: updateSaveStatus });
+      const keepCameraOpen = app.getControlConfig().camera.keepCameraOpen;
+      if (keepCameraOpen) shutter.disabled = false;
+      else {
+        updateSaveStatus({ state: 'processing', pending: 1 });
+        const project = await processing;
+        if (project) {
+          cleanup();
+          app.router.navigate(`/editor?id=${project.id}`);
+        } else shutter.disabled = false;
+      }
     } catch (error) {
       console.error('[camera] Foto gagal', error);
       showToast(`Foto gagal: ${error.message}`, { type: 'error', duration: 6000 });
       shutter.disabled = false;
     } finally {
       shutter.classList.remove('is-capturing');
-      setGlobalBusy(false);
     }
   });
 

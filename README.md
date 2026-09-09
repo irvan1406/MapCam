@@ -1,28 +1,29 @@
-# GPS Map Camera & GPS Photo Editor
+# MapCam — GPS Camera & Photo Editor
 
-![GPS Map Camera icon](public/icons/app-icon-192.svg)
+![MapCam icon](public/icons/app-icon-192.svg)
 
-Aplikasi Android mobile-first untuk mengambil foto baru dengan GPS map stamp atau membuat versi GPS Map baru dari foto galeri. Data aktual/EXIF disimpan sebagai **Original Data**, sedangkan perubahan pengguna disimpan terpisah sebagai **Display Data**. Foto sumber tidak pernah ditimpa.
+Aplikasi Android mobile-first untuk mengambil foto dengan GPS map stamp realtime atau membuat versi MapCam baru dari foto galeri. Data aktual/EXIF disimpan sebagai **Original Data**, sedangkan perubahan pengguna disimpan terpisah sebagai **Display Data**. Foto sumber tidak pernah ditimpa.
 
-Versi terbaru: **1.1.0** · Package: `id.irvan.gpsmapcamera` · Project schema: **v3**
+Versi terbaru: **1.2.0** · Package: `id.irvan.gpsmapcamera` · Project schema: **v4**
 
 ## Fitur yang berfungsi
 
 - Kamera live fullscreen di dalam aplikasi, layout portrait/landscape, kamera depan/belakang, torch bila tersedia, fallback kamera sistem, file picker galeri, multi-select, dan permission saat dibutuhkan.
+- Satu tekan shutter langsung membuat project dan mengantre penyimpanan foto bertag ke Galeri Android di latar belakang; preview kamera tetap aktif untuk pemotretan berikutnya.
 - GPS stamp realtime sebelum memotret: mini map, nama lokasi, alamat lengkap, koordinat, akurasi, altitude, speed, kompas, tanggal, jam, dan zona waktu.
 - GPS high accuracy, accuracy value, timeout/lock state, permission denied, dan lokasi manual.
 - Pembacaan JPEG EXIF lokal: `DateTimeOriginal`, GPS latitude/longitude, altitude, dan orientation.
 - Mini map dengan tile, pin, drag map, tap titik, zoom, pencarian, reverse geocoding, serta latitude/longitude manual.
 - Edit alamat, tanggal, jam, detik, zona waktu, dan beberapa format tampilan.
 - Original Data vs Display Data, edited flags, dan **Kembalikan ke Data Asli**.
-- Stamp editor: drag, resize, opacity, ukuran map/teks, alignment, warna, dan show/hide field.
+- Stamp editor: posisi otomatis presisi sesuai orientasi, drag opsional, resize, opacity, ukuran map/teks, alignment, warna, dan show/hide field.
 - Template Lanjutan, Tanggal & Waktu, Pemindaian Lokasi dengan QR, Classic, Pelaporan/Check In, Kompas Navigasi, Minimal, Field Work, Dark, dan Transparent; tersedia juga preset custom.
 - QR lokasi dibuat lokal tanpa mengirim koordinat ke layanan generator QR dan selalu mengikuti **Display Location**.
-- Foto galeri tanpa GPS menawarkan aksi langsung **Lokasi Saat Ini** atau **Pilih di Peta**; aplikasi tidak mengarang koordinat.
+- Foto galeri tanpa GPS dapat memakai lokasi perangkat saat diimpor atau aksi **Pilih di Peta**; koordinat Display Data tetap terpisah dari Original Data yang kosong.
 - Undo/redo, Original/Result comparison, autosave, resume draft, duplicate project, dan migration.
 - Export JPEG Maximum/High/Medium dari source resolusi tinggi, file baru, share, dan MediaStore Android.
 - Batch membaca metadata tiap foto secara individual dan export berurutan.
-- Light/dark mode, remote-web Android shell dengan fallback offline, PWA, IndexedDB local storage, APK/AAB, GitHub Pages, dan GitHub Actions.
+- Branding profesional MapCam, mode admin tersembunyi, popup pembuka terjadwal, light/dark mode, remote-web Android shell dengan fallback offline, PWA, IndexedDB local storage, APK/AAB, GitHub Pages, dan GitHub Actions.
 
 ## Teknologi
 
@@ -109,6 +110,12 @@ Workflow Android memakai path filter, sehingga perubahan biasa pada `src/` atau 
 
 > Update APK tanpa uninstall membutuhkan package ID yang sama dan signing key yang sama. Artifact debug dari runner CI berbeda dapat mempunyai debug key berbeda; gunakan signed release dan simpan keystore secara aman di GitHub Actions Secrets untuk jalur update native jangka panjang.
 
+### Control Center tersembunyi
+
+Control Center dibuka dari logo pada halaman Pengaturan melalui gesture tersembunyi, kemudian meminta PIN pemilik. PIN tidak dicetak di antarmuka atau dokumentasi. Panel tersebut dapat mengubah nama/header, subjudul, logo, warna aksen, perilaku kamera cepat, popup pembuka beserta frekuensinya, dan background admin.
+
+Perubahan tersimpan lokal dan langsung berlaku di perangkat tersebut. Seluruh shell juga membaca `public/control-config.json` secara network-first. Karena repository statis tidak mempunyai endpoint tulis, publikasi global dilakukan dengan tombol **Salin konfigurasi**, lalu konfigurasi diperbarui ke repository MapCam. Setelah GitHub Pages selesai deploy, perangkat lain menerima pengaturan baru saat aplikasi dibuka—tanpa rebuild APK.
+
 ### Build native dan release
 
 Workflow `.github/workflows/android.yml` melakukan:
@@ -145,17 +152,17 @@ Versioning mengikuti `MAJOR.MINOR.PATCH`.
 2. Samakan `version` di `package.json`.
 3. Tambahkan isi `CHANGELOG.md`.
 4. Jalankan `npm run version:check` dan `npm run check`.
-5. Commit, kemudian buat tag yang sama, misalnya `v1.1.0`.
+5. Commit, kemudian buat tag yang sama, misalnya `v1.2.0`.
 
 ## Struktur folder
 
 ```text
 src/
   components/    shared UI, icons, layout, dialogs
-  config/        runtime config loader
+  config/        runtime and public control-config loaders
   core/          router and application state store
   editor/        canvas renderer and undo/redo history
-  models/        project schema, settings, templates, migrations
+  models/        project schema, settings, templates, control config, migrations
   screens/       home, editor, map picker, projects, batch, settings
   services/      camera/gallery, GPS, EXIF, map, image, export
   storage/       IndexedDB repositories and geocode cache
@@ -179,6 +186,8 @@ Arsitektur dan alur data lebih lengkap ada di [docs/ARCHITECTURE.md](docs/ARCHIT
 - map providers, default zoom, serta batas zoom;
 - geocoding endpoint, bahasa, cache TTL, serta rate limit;
 - kualitas, batas megapixel, JPEG quality, dan pola nama export.
+
+`public/control-config.json` menyimpan branding, perilaku kamera cepat, popup pembuka, dan tampilan admin yang aman dipublikasikan. Jangan menaruh credential atau secret di file ini.
 
 Untuk provider ber-API-key, jangan commit key. Inject key pada langkah build atau gunakan konfigurasi privat/CI. `.env.example` hanya mendokumentasikan nama variabel dan tidak berisi secret.
 

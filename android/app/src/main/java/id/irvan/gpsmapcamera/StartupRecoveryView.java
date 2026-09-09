@@ -62,7 +62,7 @@ final class StartupRecoveryView {
 
         TextView message = text(
                 activity,
-                "GPS Map Camera berhasil mencegah aplikasi tertutup. Tekan Coba Lagi. Jika error berkaitan dengan WebView, gunakan tombol pengaturan di bawah.",
+                "MapCam berhasil mencegah aplikasi tertutup. Tekan Coba Lagi. Jika error berkaitan dengan WebView, gunakan tombol pengaturan di bawah.",
                 15,
                 COLOR_MUTED,
                 Typeface.NORMAL
@@ -122,7 +122,7 @@ final class StartupRecoveryView {
     private static void copyDiagnostics(Activity activity, String diagnostics) {
         ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
         if (clipboard != null) {
-            clipboard.setPrimaryClip(ClipData.newPlainText("GPS Map Camera startup error", diagnostics));
+            clipboard.setPrimaryClip(ClipData.newPlainText("MapCam startup error", diagnostics));
             Toast.makeText(activity, "Detail error berhasil disalin.", Toast.LENGTH_SHORT).show();
         }
     }

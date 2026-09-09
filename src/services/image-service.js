@@ -68,6 +68,24 @@ export function fileToDataUrl(file) {
   });
 }
 
+export async function optimizeLogoDataUrl(file, maxDimension = 512) {
+  if (!file?.type?.startsWith('image/')) throw new Error('Pilih file gambar yang valid.');
+  if (file.size > 8 * 1024 * 1024) throw new Error('Ukuran logo maksimal 8 MB.');
+  const source = await loadImageSource(file);
+  try {
+    const scale = Math.min(1, maxDimension / Math.max(source.width, source.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(source.width * scale));
+    canvas.height = Math.max(1, Math.round(source.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Logo tidak dapat diproses.');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(source.image, 0, 0, canvas.width, canvas.height);
+    const blob = await canvasToBlob(canvas, 'image/webp', 0.9);
+    return fileToDataUrl(blob);
+  } finally { URL.revokeObjectURL(source.url); }
+}
+
 export function calculateExportSize(width, height, maxMegapixels) {
   const pixels = width * height;
   const maximumPixels = maxMegapixels * 1_000_000;

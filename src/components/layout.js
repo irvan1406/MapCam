@@ -1,5 +1,6 @@
 import { icon } from './icons.js';
 import { escapeHtml } from '../utils/text.js';
+import { brandMarkMarkup } from './brand.js';
 
 export function bottomNavigation(active = 'home') {
   const items = [
@@ -17,7 +18,7 @@ export function bottomNavigation(active = 'home') {
 export function pageHeader({ title, subtitle = '', subtitleHtml = '', back = false, actions = '' }) {
   return `<header class="page-header">
     <div class="page-title-row">
-      ${back ? `<button class="icon-button" data-action="back" aria-label="Kembali">${icon('arrowLeft')}</button>` : '<div class="brand-mark brand-mark-small"><span></span></div>'}
+      ${back ? `<button class="icon-button" data-action="back" aria-label="Kembali">${icon('arrowLeft')}</button>` : brandMarkMarkup({ className: 'brand-mark-small' })}
       <div class="page-title"><h1>${escapeHtml(title)}</h1>${subtitleHtml ? `<p>${subtitleHtml}</p>` : subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}</div>
       <div class="page-header-actions">${actions}</div>
     </div>

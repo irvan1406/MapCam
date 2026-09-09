@@ -1,17 +1,23 @@
+import { fetchWithTimeout } from '../utils/async.js';
+
 const FALLBACK_CONFIG = Object.freeze({
   app: {
-    name: 'GPS Map Camera',
-    shortName: 'GPS Camera',
+    name: 'MapCam',
+    shortName: 'MapCam',
     packageId: 'id.irvan.gpsmapcamera',
-    versionName: '1.1.0',
-    versionCode: 3,
-    projectSchemaVersion: 3,
+    versionName: '1.2.0',
+    versionCode: 4,
+    projectSchemaVersion: 4,
   },
   features: {
     batchExport: true,
     customPresets: true,
     nativeBridge: true,
     offlineEditor: true,
+  },
+  admin: {
+    controlConfigUrl: './control-config.json',
+    publishEndpoint: '',
   },
   maps: {
     defaultProvider: 'openstreetmap',
@@ -37,9 +43,9 @@ const FALLBACK_CONFIG = Object.freeze({
   },
   export: {
     defaultQuality: 'high',
-    jpegQuality: { maximum: 0.96, high: 0.9, medium: 0.78 },
-    maxMegapixels: { maximum: 80, high: 24, medium: 12 },
-    fileNamePattern: 'GPSMapCamera-{date}-{time}',
+    jpegQuality: { maximum: 0.96, high: 0.9, fast: 0.88, medium: 0.78 },
+    maxMegapixels: { maximum: 80, high: 24, fast: 12, medium: 12 },
+    fileNamePattern: 'MapCam-{date}-{time}',
   },
 });
 
@@ -60,7 +66,7 @@ function deepMerge(base, override) {
 
 export async function loadRuntimeConfig() {
   try {
-    const response = await fetch('./app.config.json', { cache: 'no-store' });
+    const response = await fetchWithTimeout('./app.config.json', { cache: 'no-store' }, 2500);
     if (!response.ok) throw new Error(`Config HTTP ${response.status}`);
     runtimeConfig = deepMerge(FALLBACK_CONFIG, await response.json());
   } catch (error) {

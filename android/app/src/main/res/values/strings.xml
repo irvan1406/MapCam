@@ -1,14 +1,14 @@
 <resources>
-    <string name="app_name">GPS Map Camera</string>
+    <string name="app_name">MapCam</string>
     <string name="choose_photo">Pilih foto</string>
-    <string name="share_photo">Bagikan GPS Map Photo</string>
+    <string name="share_photo">Bagikan Foto MapCam</string>
     <string name="camera_open_failed">Kamera tidak dapat dibuka. Periksa izin atau coba lagi.</string>
     <string name="camera_permission_denied">Izin kamera ditolak. Anda tetap dapat memilih foto dari galeri.</string>
     <string name="location_permission_denied">Izin lokasi ditolak. Pilih lokasi secara manual atau buka pengaturan aplikasi.</string>
     <string name="location_disabled">GPS tidak aktif. Aktifkan GPS atau pilih lokasi manual.</string>
     <string name="location_timeout">GPS belum mendapatkan lock. Coba di area terbuka atau pilih lokasi manual.</string>
     <string name="location_failed">Lokasi tidak dapat diperoleh.</string>
-    <string name="photo_saved">Foto baru disimpan ke galeri GPS Map Camera.</string>
+    <string name="photo_saved">Foto baru disimpan ke galeri MapCam.</string>
     <string name="photo_save_failed">Foto gagal disimpan</string>
     <string name="share_failed">Foto gagal dibagikan</string>
 </resources>

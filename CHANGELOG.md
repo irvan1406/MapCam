@@ -2,6 +2,30 @@
 
 Semua perubahan penting mengikuti [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-09-09
+
+### Added
+
+- Nama, header, launcher label, folder galeri, dan identitas visual profesional baru untuk MapCam.
+- Control Center tersembunyi dengan verifikasi PIN, pembatasan percobaan, penggantian logo/branding, pengaturan kamera cepat, popup pembuka, frekuensi tampil, dan pilihan background admin.
+- Konfigurasi publik network-first agar perubahan branding dan popup dapat diterapkan ke semua web-shell melalui deploy GitHub Pages tanpa rebuild APK.
+- Popup pembuka dengan mode sekali per catatan, setiap pembukaan, atau jumlah terbatas.
+- Posisi stamp berbasis anchor yang menyesuaikan foto portrait dan landscape secara presisi.
+
+### Improved
+
+- Satu tekan shutter langsung membuat project dan menyimpan hasil bertag ke Galeri Android melalui antrean latar belakang tanpa menutup kamera.
+- Daftar awal hanya membaca project terbaru agar waktu buka aplikasi lebih singkat; halaman Project tetap dapat memuat seluruh data.
+- Preview memakai update koordinat/jam realtime sementara reverse geocoding dan mini-map dibatasi agar kamera lebih ringan.
+- Foto galeri tanpa GPS dapat memakai lokasi perangkat sebagai Display Data tanpa mengubah Original Data.
+- Kualitas cepat 12 MP disediakan untuk pekerjaan lapangan dan thumbnail resolusi penuh dibuat secara tertunda.
+- Project Schema v4 memigrasikan posisi stamp lama ke mode bebas tanpa menggeser hasil yang sudah ada.
+
+### Security & Privacy
+
+- PIN admin tidak disimpan sebagai teks biasa dan sesi admin terkunci kembali saat sesi aplikasi berakhir.
+- Konfigurasi publik tidak menerima secret; perubahan global tetap melalui repository terotorisasi.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added

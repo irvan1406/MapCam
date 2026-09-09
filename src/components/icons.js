@@ -32,6 +32,11 @@ const paths = {
   flash: '<path d="m13 2-9 12h7l-1 8 9-12h-7z"/>',
   flipCamera: '<path d="M20 7h-7l2.5-2.5M4 17h7l-2.5 2.5"/><path d="M18.5 12a7 7 0 0 1-12.1 4.8M5.5 12A7 7 0 0 1 17.6 7.2"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
+  lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
+  megaphone: '<path d="m3 11 16-7v16L3 13z"/><path d="M11.6 16.5 13 21H7l-1.4-6"/>',
+  logout: '<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>',
+  refresh: '<path d="M20 6v5h-5M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.6-2.6L20 11M4 13l2.3 4.6A7 7 0 0 0 17.9 15"/>',
 };
 
 export function icon(name, size = 22, className = '') {

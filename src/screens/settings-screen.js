@@ -3,11 +3,15 @@ import { icon } from '../components/icons.js';
 import { BUILT_IN_TEMPLATES } from '../models/templates.js';
 import { getConfig } from '../config/runtime-config.js';
 import { getStorageEstimate } from '../storage/database.js';
-import { showToast } from '../components/ui.js';
+import { openSheet, showToast } from '../components/ui.js';
+import { brandMarkMarkup, getActiveBranding } from '../components/brand.js';
+import { getAdminAttemptState, isAdminUnlocked, recordAdminFailure, unlockAdminSession, verifyAdminPin } from '../services/admin-auth-service.js';
+import { escapeHtml } from '../utils/text.js';
 
 export async function renderSettingsScreen(app, root) {
   const settings = app.store.getState().settings;
   const config = getConfig();
+  const branding = getActiveBranding();
   const estimate = await getStorageEstimate().catch(() => null);
   root.innerHTML = `<main class="app-page settings-page with-bottom-nav">
     ${pageHeader({ title: 'Pengaturan', subtitle: `Versi ${config.app.versionName}` })}
@@ -29,7 +33,7 @@ export async function renderSettingsScreen(app, root) {
         ${selectRow('Provider map', 'mapProviderId', settings.mapProviderId, config.maps.providers.filter((item) => item.enabled).map((item) => [item.id,item.label]))}
         ${rangeRow('Zoom map default', 'mapZoom', settings.mapZoom, 2, 19, 1)}
         ${selectRow('Kualitas export', 'exportQuality', settings.exportQuality, [['maximum','Original / Maximum'],['high','High'],['medium','Medium']])}
-        ${textRow('Pola nama file', 'fileNamePattern', settings.fileNamePattern, 'GPSMapCamera-{date}-{time}')}
+        ${textRow('Pola nama file', 'fileNamePattern', settings.fileNamePattern, 'MapCam-{date}-{time}')}
         <p class="setting-help">Variabel: {date}, {time}, {location}</p>
       `)}
       ${settingsGroup('Project & privasi', 'folder', `
@@ -37,7 +41,7 @@ export async function renderSettingsScreen(app, root) {
         <div class="setting-static"><span><strong>Penyimpanan lokal</strong><small>${estimate ? `${formatBytes(estimate.usage || 0)} terpakai dari ${formatBytes(estimate.quota || 0)}` : 'Tersimpan di perangkat ini'}</small></span><span class="privacy-lock">Lokal</span></div>
         <div class="privacy-panel">${icon('info', 20)}<p>Foto, EXIF, GPS, dan project tidak diunggah otomatis. Permintaan map/alamat hanya dikirim saat diperlukan.</p></div>
       `)}
-      <section class="settings-group about-card"><div class="about-logo"><span></span></div><div><strong>${config.app.name}</strong><small>Version ${config.app.versionName} (${config.app.versionCode})</small><p>GPS photo editor yang menjaga data asli tetap terpisah dari data tampilan.</p></div></section>
+      <section class="settings-group about-card">${brandMarkMarkup({ className: 'about-logo', id: 'settings-brand-logo', button: true, label: 'Logo aplikasi' })}<div><strong>${escapeHtml(branding.appName)}</strong><small>Version ${config.app.versionName} (${config.app.versionCode})</small><p>GPS photo editor yang menjaga data asli tetap terpisah dari data tampilan.</p></div></section>
     </form>
   </main>${bottomNavigation('settings')}`;
 
@@ -55,6 +59,62 @@ export async function renderSettingsScreen(app, root) {
     const output = form.querySelector(`[data-range-output="${input.name}"]`);
     if (output) output.textContent = input.value;
   }));
+  bindAdminTrigger(app, root.querySelector('#settings-brand-logo'));
+}
+
+function bindAdminTrigger(app, logo) {
+  if (!logo) return;
+  let taps = [];
+  logo.addEventListener('click', () => {
+    const now = Date.now();
+    taps = [...taps.filter((time) => now - time < 1700), now];
+    if (taps.length < 5) return;
+    taps = [];
+    if (isAdminUnlocked()) app.router.navigate('/admin');
+    else openAdminUnlockSheet(app);
+  });
+}
+
+function openAdminUnlockSheet(app) {
+  const attempt = getAdminAttemptState();
+  const lockedSeconds = Math.ceil(attempt.remainingMs / 1000);
+  openSheet({
+    title: 'Verifikasi',
+    className: 'admin-pin-sheet',
+    content: `<form id="admin-pin-form" class="sheet-form">
+      <div class="admin-pin-icon">${icon('lock', 26)}</div>
+      <label><span>Kode akses</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required ${attempt.remainingMs ? 'disabled' : ''}></label>
+      <p class="admin-pin-message ${attempt.remainingMs ? 'error' : ''}">${attempt.remainingMs ? `Coba kembali dalam ${lockedSeconds} detik.` : 'Masukkan kode untuk melanjutkan.'}</p>
+      <div class="sheet-actions"><button type="button" class="button button-ghost sheet-cancel">Batal</button><button type="submit" class="button button-primary" ${attempt.remainingMs ? 'disabled' : ''}>Lanjutkan</button></div>
+    </form>`,
+    onMount: (sheet, close) => {
+      const form = sheet.querySelector('#admin-pin-form');
+      const message = sheet.querySelector('.admin-pin-message');
+      const input = form.elements.pin;
+      sheet.querySelector('.sheet-cancel').addEventListener('click', close);
+      if (!attempt.remainingMs) setTimeout(() => input.focus(), 180);
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const current = getAdminAttemptState();
+        if (current.remainingMs) return;
+        const valid = await verifyAdminPin(new FormData(form).get('pin')).catch(() => false);
+        input.value = '';
+        if (valid) {
+          unlockAdminSession();
+          close();
+          app.router.navigate('/admin');
+          return;
+        }
+        const failure = recordAdminFailure();
+        message.classList.add('error');
+        if (failure.lockedUntil) {
+          input.disabled = true;
+          form.querySelector('[type="submit"]').disabled = true;
+          message.textContent = 'Terlalu banyak percobaan. Tunggu 30 detik.';
+        } else message.textContent = 'Kode tidak sesuai.';
+      });
+    },
+  });
 }
 
 function settingsGroup(title, iconName, body) {

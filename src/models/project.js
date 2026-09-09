@@ -2,7 +2,7 @@ import { createId } from '../utils/id.js';
 import { toLocalIso } from '../utils/date.js';
 import { getTemplate, cloneTemplate, FIELD_DEFAULTS } from './templates.js';
 
-export const PROJECT_SCHEMA_VERSION = 3;
+export const PROJECT_SCHEMA_VERSION = 4;
 
 const emptyMetadata = () => ({
   latitude: null,
@@ -57,6 +57,7 @@ export function createProject({ sourceType, file, metadata = {}, settings, custo
     coordinateFormat: settings.coordinateFormat,
     fileNamePattern: settings.fileNamePattern,
     overlay: {
+      anchor: 'bottom-left',
       x: 0.04,
       y: 0.72,
       width: 0.92,
@@ -118,14 +119,15 @@ export function migrateProject(project) {
     project.template.fields = { ...FIELD_DEFAULTS, ...project.template.fields };
     project.originalData = { ...emptyMetadata(), ...project.originalData };
     project.displayData = { ...emptyMetadata(), ...project.displayData };
+    project.overlay = { anchor: 'free', x: 0.04, y: 0.72, width: 0.92, scale: 1, opacity: 1, textScale: 1, mapScale: 1, alignment: 'left', rotation: 0, ...project.overlay };
     return project;
   }
-  if (schemaVersion === 1 || schemaVersion === 2) {
+  if (schemaVersion === 1 || schemaVersion === 2 || schemaVersion === 3) {
     project.schemaVersion = PROJECT_SCHEMA_VERSION;
     project.editedFields ??= {};
     project.texts ??= [];
     project.map ??= { providerId: 'openstreetmap', zoom: 16, centerMode: 'display-location', available: true };
-    project.overlay ??= { x: 0.04, y: 0.72, width: 0.92, scale: 1, opacity: 1, textScale: 1, mapScale: 1, alignment: 'left', rotation: 0 };
+    project.overlay = { anchor: 'free', x: 0.04, y: 0.72, width: 0.92, scale: 1, opacity: 1, textScale: 1, mapScale: 1, alignment: 'left', rotation: 0, ...project.overlay };
     project.template.layout = { variant: 'classic', ...project.template.layout };
     project.template.fields = { ...FIELD_DEFAULTS, ...project.template.fields };
     project.originalData = { ...emptyMetadata(), ...project.originalData };

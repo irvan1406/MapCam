@@ -4,24 +4,26 @@ import { formatRelative } from '../utils/date.js';
 import { escapeHtml, truncate } from '../utils/text.js';
 import { templatePreviewMarkup } from '../components/template-preview.js';
 import { BUILT_IN_TEMPLATES } from '../models/templates.js';
+import { brandMarkMarkup, getActiveBranding } from '../components/brand.js';
 
 export async function renderHomeScreen(app, root) {
   const state = app.store.getState();
   const recent = state.projects.slice(0, 3);
   const draft = state.projects.find((project) => project.status === 'draft');
   const permission = state.permissions;
+  const branding = getActiveBranding();
   root.innerHTML = `
     <main class="app-page home-page with-bottom-nav">
       <header class="home-header">
-        <div class="brand-lockup"><div class="brand-mark"><span></span></div><div><strong>GPS Map Camera</strong><small>Camera & Photo Editor</small></div></div>
-        ${navigator.onLine ? statusPill('Siap', 'success') : statusPill('Offline', 'warning')}
+        <div class="brand-lockup">${brandMarkMarkup()}<div><strong>${escapeHtml(branding.headerTitle)}</strong><small>${escapeHtml(branding.tagline)}</small></div></div>
+        ${navigator.onLine ? statusPill(branding.statusLabel, 'success') : statusPill('Offline', 'warning')}
       </header>
 
       <section class="hero-card">
         <div class="hero-glow"></div>
-        <div class="hero-copy"><span class="eyebrow">GPS STAMP AKURAT</span><h1>Foto lokasi yang rapi,<br><em>bisa diedit kapan saja.</em></h1><p>Data aktual dipakai otomatis. Foto asli selalu aman.</p></div>
+        <div class="hero-copy"><span class="eyebrow">${escapeHtml(branding.appName.toUpperCase())} • GPS REALTIME</span><h1>Foto lokasi yang rapi,<br><em>langsung tersimpan.</em></h1><p>Stamp GPS otomatis masuk galeri dan project tetap bisa diedit.</p></div>
         <div class="hero-actions">
-          <button class="capture-button" data-action="camera"><span class="capture-ring">${icon('camera', 29)}</span><span><strong>Ambil Foto</strong><small>GPS otomatis</small></span>${icon('chevronRight', 20)}</button>
+          <button class="capture-button" data-action="camera"><span class="capture-ring">${icon('camera', 29)}</span><span><strong>Ambil Foto</strong><small>GPS realtime • simpan instan</small></span>${icon('chevronRight', 20)}</button>
           <button class="gallery-button" data-action="gallery"><span>${icon('image', 22)}</span><strong>Pilih dari Galeri</strong><small>EXIF otomatis</small></button>
         </div>
       </section>

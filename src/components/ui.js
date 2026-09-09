@@ -59,6 +59,22 @@ export function confirmDialog({ title, message, confirmLabel = 'Lanjutkan', dest
   });
 }
 
+export function noticeDialog({ title, message, buttonLabel = 'Mengerti', logoMarkup = '' }) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'app-dialog notice-dialog';
+    dialog.innerHTML = `<form method="dialog">
+      ${logoMarkup ? `<div class="notice-logo">${logoMarkup}</div>` : `<div class="dialog-icon">${icon('info', 26)}</div>`}
+      <h3>${escapeHtml(title)}</h3>
+      <p class="notice-message">${escapeHtml(message)}</p>
+      <button class="button button-primary full-width" value="confirm">${escapeHtml(buttonLabel)}</button>
+    </form>`;
+    document.body.append(dialog);
+    dialog.addEventListener('close', () => { dialog.remove(); resolve(); }, { once: true });
+    dialog.showModal();
+  });
+}
+
 export function openSheet({ title, content, onMount, className = '' }) {
   const overlay = document.createElement('div');
   overlay.className = 'sheet-overlay is-visible';

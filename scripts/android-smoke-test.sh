@@ -36,7 +36,7 @@ for _attempt in $(seq 1 15); do
     echo "Proses aplikasi berhenti saat startup."
     exit 1
   fi
-  if adb logcat -d -s GPSMapCamera:I '*:S' | grep -Fq "WEB_APP_READY"; then
+  if adb logcat -d -s MapCam:I '*:S' | grep -Fq "WEB_APP_READY"; then
     READY=true
     break
   fi

@@ -1,6 +1,6 @@
 const CACHE_VERSION = 'gps-map-camera-__APP_VERSION__-__BUILD_ID__';
 const APP_SHELL = [
-  './', './index.html', './manifest.webmanifest', './app.config.json',
+  './', './index.html', './manifest.webmanifest', './app.config.json', './control-config.json',
   './bootstrap.js?v=__BUILD_ID__', './src/styles.css?v=__BUILD_ID__', './src/main.js?v=__BUILD_ID__', './icons/app-icon.svg',
 ];
 

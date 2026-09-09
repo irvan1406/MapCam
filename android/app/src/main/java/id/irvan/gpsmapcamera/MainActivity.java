@@ -58,7 +58,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends Activity {
-    private static final String TAG = "GPSMapCamera";
+    private static final String TAG = "MapCam";
     private static final int REQUEST_FILE_CHOOSER = 2101;
     private static final int REQUEST_CAMERA_PERMISSION = 2102;
     private static final int REQUEST_LOCATION_PERMISSION = 2103;
@@ -139,7 +139,7 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setUserAgentString(settings.getUserAgentString() + " GPSMapCamera/" + BuildConfig.VERSION_NAME + " (" + BuildConfig.APPLICATION_ID + ")");
+        settings.setUserAgentString(settings.getUserAgentString() + " MapCam/" + BuildConfig.VERSION_NAME + " (" + BuildConfig.APPLICATION_ID + ")");
 
         webView.addJavascriptInterface(new NativeBridge(), "AndroidBridge");
         webView.setWebViewClient(new LocalAssetWebViewClient());
@@ -246,7 +246,7 @@ public class MainActivity extends Activity {
                 cameraOutputUri = ShareFileProvider.uriForFile(this, cameraFile);
                 Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                 cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraOutputUri);
-                cameraIntent.setClipData(ClipData.newRawUri("GPS Map Camera", cameraOutputUri));
+                cameraIntent.setClipData(ClipData.newRawUri("MapCam", cameraOutputUri));
                 cameraIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 startActivityForResult(cameraIntent, REQUEST_FILE_CHOOSER);
                 return;
@@ -460,7 +460,7 @@ public class MainActivity extends Activity {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/GPS Map Camera/" + subfolder);
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MapCam/" + subfolder);
             values.put(MediaStore.Images.Media.IS_PENDING, 1);
             Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
             if (uri == null) throw new IOException("MediaStore menolak file.");
@@ -480,7 +480,7 @@ public class MainActivity extends Activity {
         File pictures = hasPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 ? Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
                 : getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File directory = new File(pictures, "GPS Map Camera/" + subfolder);
+        File directory = new File(pictures, "MapCam/" + subfolder);
         if (!directory.exists() && !directory.mkdirs()) directory = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         File destination = uniqueFile(directory, fileName);
         try (OutputStream output = new FileOutputStream(destination)) { copy(input, output); }
@@ -505,7 +505,7 @@ public class MainActivity extends Activity {
     }
 
     private String sanitizeFileName(String value) {
-        String clean = value == null ? "GPSMapCamera.jpg" : value.replaceAll("[^a-zA-Z0-9._-]", "-");
+        String clean = value == null ? "MapCam.jpg" : value.replaceAll("[^a-zA-Z0-9._-]", "-");
         return clean.toLowerCase(Locale.ROOT).endsWith(".jpg") ? clean : clean + ".jpg";
     }
 
@@ -518,7 +518,7 @@ public class MainActivity extends Activity {
         Intent share = new Intent(Intent.ACTION_SEND);
         share.setType("image/jpeg");
         share.putExtra(Intent.EXTRA_STREAM, uri);
-        share.setClipData(ClipData.newRawUri("GPS Map Photo", uri));
+        share.setClipData(ClipData.newRawUri("MapCam Photo", uri));
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         runOnUiThread(() -> startActivity(Intent.createChooser(share, getString(R.string.share_photo))));
     }
@@ -669,7 +669,7 @@ public class MainActivity extends Activity {
             connection.setInstanceFollowRedirects(true);
             connection.setUseCaches(false);
             connection.setRequestProperty("Accept", "text/html,application/javascript,application/json,text/css,image/*,*/*;q=0.8");
-            connection.setRequestProperty("User-Agent", "GPSMapCamera-Android/" + BuildConfig.VERSION_NAME);
+            connection.setRequestProperty("User-Agent", "MapCam-Android/" + BuildConfig.VERSION_NAME);
             try {
                 int status = connection.getResponseCode();
                 if (status < 200 || status >= 300) throw new IOException("Remote HTTP " + status);
@@ -679,7 +679,7 @@ public class MainActivity extends Activity {
                 }
                 if ("index.html".equals(path)) {
                     String html = new String(body, StandardCharsets.UTF_8);
-                    if (!html.contains("./bootstrap.js") || !html.contains("GPS Map Camera")) throw new IOException("Remote index is not a MapCam web build");
+                    if (!html.contains("./bootstrap.js") || !html.contains("MapCam")) throw new IOException("Remote index is not a MapCam web build");
                 }
                 String contentType = connection.getContentType();
                 String mime = contentType == null ? mimeType(path) : contentType.split(";", 2)[0];

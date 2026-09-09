@@ -120,7 +120,7 @@ function loadTile(url) {
     const timer = setTimeout(() => {
       image.src = '';
       reject(new Error('Tile map timeout.'));
-    }, 8000);
+    }, 3000);
     image.crossOrigin = 'anonymous';
     image.decoding = 'async';
     image.onload = () => { clearTimeout(timer); resolve(image); };

@@ -50,7 +50,7 @@ export async function saveExport(exported) {
 export async function shareExport(exported) {
   const file = new File([exported.blob], exported.fileName, { type: exported.blob.type || 'image/jpeg' });
   if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: 'GPS Map Photo', text: 'Dibuat dengan GPS Map Camera' });
+    await navigator.share({ files: [file], title: 'Foto MapCam', text: 'Dibuat dengan MapCam' });
     return { method: 'web-share' };
   }
   if (globalThis.AndroidBridge?.shareImage) {
@@ -71,7 +71,7 @@ export function buildFileName(project) {
     .replace('{date}', date)
     .replace('{time}', time)
     .replace('{location}', location);
-  return `${fileSafe(base) || 'GPSMapCamera'}.jpg`;
+  return `${fileSafe(base) || 'MapCam'}.jpg`;
 }
 
 function blobToDataUrl(blob) {

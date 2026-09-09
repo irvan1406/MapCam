@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, normalizeSettings } from '../models/settings.js';
 import { migrateProject } from '../models/project.js';
+import { normalizeControlConfig } from '../models/control-config.js';
 
 const DB_NAME = 'gps-map-camera';
 const DB_VERSION = 3;
@@ -88,8 +89,22 @@ export async function getProject(id) {
   return project ? migrateProject(project) : null;
 }
 
-export async function listProjects() {
-  const projects = await withStore(STORES.projects, 'readonly', (store) => requestToPromise(store.getAll()));
+export async function listProjects({ limit = null } = {}) {
+  const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : null;
+  const projects = await withStore(STORES.projects, 'readonly', (store) => {
+    if (!safeLimit) return requestToPromise(store.getAll());
+    return new Promise((resolve, reject) => {
+      const values = [];
+      const request = store.index('modifiedAt').openCursor(null, 'prev');
+      request.onerror = () => reject(request.error ?? new Error('Daftar project gagal dibuka.'));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor || values.length >= safeLimit) { resolve(values); return; }
+        values.push(cursor.value);
+        cursor.continue();
+      };
+    });
+  });
   return projects
     .map((project) => {
       try { return migrateProject(project); }
@@ -112,6 +127,36 @@ export async function saveSettings(settings) {
   const value = normalizeSettings(settings);
   await withStore(STORES.settings, 'readwrite', (store) => requestToPromise(store.put({ id: 'settings', value })));
   return value;
+}
+
+export async function loadLocalControlConfig() {
+  const record = await withStore(STORES.settings, 'readonly', (store) => requestToPromise(store.get('control-config')));
+  return record?.value ? normalizeControlConfig(record.value) : null;
+}
+
+export async function saveLocalControlConfig(config) {
+  const value = normalizeControlConfig(config);
+  await withStore(STORES.settings, 'readwrite', (store) => requestToPromise(store.put({ id: 'control-config', value })));
+  return value;
+}
+
+export async function clearLocalControlConfig() {
+  await withStore(STORES.settings, 'readwrite', (store) => requestToPromise(store.delete('control-config')));
+}
+
+export async function loadAnnouncementState() {
+  const record = await withStore(STORES.settings, 'readonly', (store) => requestToPromise(store.get('announcement-state')));
+  return record?.value && typeof record.value === 'object' ? record.value : { id: '', count: 0, lastShownAt: null };
+}
+
+export async function saveAnnouncementState(value) {
+  const safe = {
+    id: String(value?.id ?? '').slice(0, 64),
+    count: Math.max(0, Number(value?.count) || 0),
+    lastShownAt: value?.lastShownAt || null,
+  };
+  await withStore(STORES.settings, 'readwrite', (store) => requestToPromise(store.put({ id: 'announcement-state', value: safe })));
+  return safe;
 }
 
 export async function listCustomTemplates() {

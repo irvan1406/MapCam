@@ -1,9 +1,9 @@
 {
-  "name": "gps-map-camera",
-  "version": "1.1.0",
+  "name": "mapcam",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "GPS Map Camera & GPS Photo Editor for Android and the web.",
+  "description": "MapCam realtime GPS camera and editable photo project app for Android and the web.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "build": "node scripts/build.mjs",

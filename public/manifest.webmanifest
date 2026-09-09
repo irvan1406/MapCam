@@ -1,6 +1,6 @@
 {
-  "name": "GPS Map Camera & GPS Photo Editor",
-  "short_name": "GPS Camera",
+  "name": "MapCam",
+  "short_name": "MapCam",
   "description": "Ambil atau edit foto dengan GPS map stamp yang dapat diedit kembali.",
   "id": "/",
   "start_url": "./#/home",

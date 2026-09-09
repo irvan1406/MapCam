@@ -86,12 +86,12 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app.config.json').app.versionName")
           mkdir -p release-files
-          cp android/app/build/outputs/apk/debug/app-debug.apk "release-files/GPSMapCamera-v${VERSION}-debug.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "release-files/MapCam-v${VERSION}-debug.apk"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: gps-map-camera-debug-apk
+          name: mapcam-debug-apk
           path: release-files/*-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -154,16 +154,16 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app.config.json').app.versionName")
           mkdir -p release-files
-          cp android/app/build/outputs/apk/release/app-release.apk "release-files/GPSMapCamera-v${VERSION}.apk"
-          cp android/app/build/outputs/bundle/release/app-release.aab "release-files/GPSMapCamera-v${VERSION}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "release-files/MapCam-v${VERSION}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "release-files/MapCam-v${VERSION}.aab"
           sha256sum release-files/* > release-files/SHA256SUMS.txt
 
       - name: Upload signed build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gps-map-camera-${{ github.ref_name }}
+          name: mapcam-${{ github.ref_name }}
           path: release-files/
           if-no-files-found: error
 
       - name: Create GitHub Release
-        run: gh release create "${GITHUB_REF_NAME}" release-files/* --title "GPS Map Camera ${GITHUB_REF_NAME}" --generate-notes --verify-tag
+        run: gh release create "${GITHUB_REF_NAME}" release-files/* --title "MapCam ${GITHUB_REF_NAME}" --generate-notes --verify-tag
