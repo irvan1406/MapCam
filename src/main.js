@@ -206,38 +206,63 @@ class GPSMapCameraApp {
       onStatus({ state: 'processing', pending: this.pendingCaptures });
       let project = null;
       try {
-        const control = this.getControlConfig().camera;
         project = await preparedProject;
-        const completedMetadata = await this.completeCaptureMetadata(metadata);
-        for (const [field, value] of Object.entries(completedMetadata)) {
-          const originalMissing = project.originalData[field] == null || project.originalData[field] === ''
-            || (Array.isArray(project.originalData[field]) && project.originalData[field].length === 0);
-          if (originalMissing && value != null && value !== '') project.originalData[field] = structuredClone(value);
-          if (!project.editedFields[field] && originalMissing && value != null && value !== '') project.displayData[field] = structuredClone(value);
-        }
+        // Jalur cepat: foto + data GPS langsung disimpan sebagai project
+        // begitu tombol ditekan. Langsung bisa dibuka & diedit.
         await this.saveProjectNow(project);
-        if (control.saveOriginalToGallery) this.persistCameraOriginal(file);
-        if (control.autoSaveStamped) {
-          const exported = await createExport(project, control.captureQuality);
-          await saveExport(exported);
-          await this.recordExport(project.id, exported);
-        }
         this.createDeferredThumbnail(project).catch((error) => console.warn('[camera] Thumbnail tertunda gagal', error));
-        if (control.showSaveConfirmation) {
-          showToast(control.autoSaveStamped ? 'Foto bertag tersimpan ke galeri dan project.' : 'Foto tersimpan sebagai project.', { duration: 3300 });
-        }
-        onStatus({ state: 'saved', pending: Math.max(0, this.pendingCaptures - 1), project });
-        return project;
       } catch (error) {
-        console.error('[camera] Penyimpanan latar belakang gagal', error);
-        showToast(project ? `Project tersimpan, tetapi galeri gagal: ${error.message}` : `Foto gagal disimpan: ${error.message}`, { type: 'error', duration: 6000 });
+        console.error('[camera] Penyimpanan foto gagal', error);
+        showToast(`Foto gagal disimpan: ${error.message}`, { type: 'error', duration: 6000 });
         onStatus({ state: 'error', pending: Math.max(0, this.pendingCaptures - 1), error, project });
+        this.pendingCaptures = Math.max(0, this.pendingCaptures - 1);
         return project;
-      } finally { this.pendingCaptures = Math.max(0, this.pendingCaptures - 1); }
+      }
+      this.pendingCaptures = Math.max(0, this.pendingCaptures - 1);
+      onStatus({ state: 'saved', pending: this.pendingCaptures, project });
+      const control = this.getControlConfig().camera;
+      if (control.showSaveConfirmation) {
+        showToast('Foto tersimpan. Stamp resolusi tinggi diproses di latar belakang.', { duration: 3300 });
+      }
+      // Jalur berat (lengkapi alamat + render stamp resolusi tinggi + simpan
+      // ke galeri) jalan terpisah di latar belakang tanpa memblokir
+      // jepretan berikutnya.
+      this.finishCaptureInBackground(project, { file, metadata }).catch((error) => {
+        console.error('[camera] Penyelesaian latar belakang gagal', error);
+      });
+      return project;
     };
     const result = this.captureQueue.then(process, process);
     this.captureQueue = result.catch(() => null);
     return result;
+  }
+
+  // Melengkapi metadata (reverse geocode), menyimpan foto asli ke galeri,
+  // dan me-render stamp resolusi tinggi — semuanya di latar belakang
+  // setelah foto tersimpan, agar tombol shutter tidak pernah menunggu.
+  async finishCaptureInBackground(project, { file, metadata }) {
+    if (!project) return;
+    try {
+      const completedMetadata = await this.completeCaptureMetadata(metadata);
+      let enriched = false;
+      for (const [field, value] of Object.entries(completedMetadata)) {
+        const originalMissing = project.originalData[field] == null || project.originalData[field] === ''
+          || (Array.isArray(project.originalData[field]) && project.originalData[field].length === 0);
+        if (originalMissing && value != null && value !== '') { project.originalData[field] = structuredClone(value); enriched = true; }
+        if (!project.editedFields[field] && originalMissing && value != null && value !== '') { project.displayData[field] = structuredClone(value); enriched = true; }
+      }
+      if (enriched) await this.saveProjectNow(project);
+      const control = this.getControlConfig().camera;
+      if (control.saveOriginalToGallery) this.persistCameraOriginal(file);
+      if (control.autoSaveStamped) {
+        const exported = await createExport(project, control.captureQuality);
+        await saveExport(exported);
+        await this.recordExport(project.id, exported);
+      }
+    } catch (error) {
+      console.error('[camera] Latar belakang gagal', error);
+      showToast(`Project tersimpan, tetapi stamp/galeri gagal: ${error.message}`, { type: 'error', duration: 6000 });
+    }
   }
 
   async completeCaptureMetadata(metadata) {
