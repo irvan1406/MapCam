@@ -221,8 +221,11 @@ class GPSMapCameraApp {
       this.pendingCaptures = Math.max(0, this.pendingCaptures - 1);
       onStatus({ state: 'saved', pending: this.pendingCaptures, project });
       const control = this.getControlConfig().camera;
+      const backgroundHighRes = this.store.getState().settings.backgroundHighRes !== false;
       if (control.showSaveConfirmation) {
-        showToast('Foto tersimpan. Stamp resolusi tinggi diproses di latar belakang.', { duration: 3300 });
+        showToast(backgroundHighRes
+          ? 'Foto tersimpan. Stamp resolusi tinggi diproses di latar belakang.'
+          : 'Foto tersimpan sebagai project.', { duration: 3300 });
       }
       // Jalur berat (lengkapi alamat + render stamp resolusi tinggi + simpan
       // ke galeri) jalan terpisah di latar belakang tanpa memblokir
@@ -253,8 +256,9 @@ class GPSMapCameraApp {
       }
       if (enriched) await this.saveProjectNow(project);
       const control = this.getControlConfig().camera;
+      const backgroundHighRes = this.store.getState().settings.backgroundHighRes !== false;
       if (control.saveOriginalToGallery) this.persistCameraOriginal(file);
-      if (control.autoSaveStamped) {
+      if (backgroundHighRes && control.autoSaveStamped) {
         const exported = await createExport(project, control.captureQuality);
         await saveExport(exported);
         await this.recordExport(project.id, exported);
