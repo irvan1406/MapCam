@@ -47,7 +47,7 @@ export async function renderCameraScreen(app, root) {
       </div>
     </header>
     <div class="camera-gps-status searching" id="camera-gps-status"><span class="camera-status-dot"></span><span>Mencari lokasi GPS…</span></div>
-    <div class="camera-save-status" id="camera-save-status" hidden><span class="spinner small"></span><span>Menyimpan di latar belakang…</span></div>
+    <div class="camera-save-status" id="camera-save-status" hidden><span class="spinner small"></span><span>Menyimpan…</span></div>
     <div class="camera-capture-flash" id="camera-capture-flash"></div>
     <section class="live-gps-stamp" id="live-gps-stamp" aria-label="GPS stamp realtime">
       <div class="live-compass" id="live-camera-compass" hidden></div>
@@ -167,7 +167,7 @@ export async function renderCameraScreen(app, root) {
       saveStatusTimer = setTimeout(() => { if (!destroyed) saveStatus.hidden = true; }, 3200);
     } else {
       spinner.hidden = false;
-      label.textContent = pending > 1 ? `Menyimpan ${pending} foto di latar belakang…` : 'Menyimpan di latar belakang…';
+      label.textContent = pending > 1 ? `Menyimpan ${pending} foto…` : 'Menyimpan…';
     }
   };
 
