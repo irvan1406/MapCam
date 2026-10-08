@@ -207,10 +207,13 @@ class GPSMapCameraApp {
       let project = null;
       try {
         project = await preparedProject;
-        // Jalur cepat: foto + data GPS langsung disimpan sebagai project
-        // begitu tombol ditekan. Langsung bisa dibuka & diedit.
+        // Jepret instan: foto + data GPS langsung disimpan sebagai project
+        // begitu tombol ditekan, lalu salinan foto asli dikirim ke galeri.
+        // Tidak ada lagi proses di latar belakang.
         await this.saveProjectNow(project);
         this.createDeferredThumbnail(project).catch((error) => console.warn('[camera] Thumbnail tertunda gagal', error));
+        const control = this.getControlConfig().camera;
+        if (control.saveOriginalToGallery) await this.persistCameraOriginal(file);
       } catch (error) {
         console.error('[camera] Penyimpanan foto gagal', error);
         showToast(`Foto gagal disimpan: ${error.message}`, { type: 'error', duration: 6000 });
@@ -220,56 +223,14 @@ class GPSMapCameraApp {
       }
       this.pendingCaptures = Math.max(0, this.pendingCaptures - 1);
       onStatus({ state: 'saved', pending: this.pendingCaptures, project });
-      const control = this.getControlConfig().camera;
-      if (control.showSaveConfirmation) {
+      if (this.getControlConfig().camera.showSaveConfirmation) {
         showToast('Foto tersimpan.', { duration: 2500 });
       }
-      // Pelengkapan ringan (isi alamat bila kosong + salin foto asli ke
-      // galeri) jalan terpisah tanpa memblokir jepretan berikutnya.
-      this.finishCaptureInBackground(project, { file, metadata }).catch((error) => {
-        console.error('[camera] Penyelesaian latar belakang gagal', error);
-      });
       return project;
     };
     const result = this.captureQueue.then(process, process);
     this.captureQueue = result.catch(() => null);
     return result;
-  }
-
-  // Melengkapi metadata (reverse geocode) dan menyimpan foto asli ke
-  // galeri — pekerjaan ringan yang jalan setelah foto tersimpan agar
-  // tombol shutter tidak pernah menunggu.
-  async finishCaptureInBackground(project, { file, metadata }) {
-    if (!project) return;
-    try {
-      const completedMetadata = await this.completeCaptureMetadata(metadata);
-      let enriched = false;
-      for (const [field, value] of Object.entries(completedMetadata)) {
-        const originalMissing = project.originalData[field] == null || project.originalData[field] === ''
-          || (Array.isArray(project.originalData[field]) && project.originalData[field].length === 0);
-        if (originalMissing && value != null && value !== '') { project.originalData[field] = structuredClone(value); enriched = true; }
-        if (!project.editedFields[field] && originalMissing && value != null && value !== '') { project.displayData[field] = structuredClone(value); enriched = true; }
-      }
-      if (enriched) await this.saveProjectNow(project);
-      const control = this.getControlConfig().camera;
-      if (control.saveOriginalToGallery) this.persistCameraOriginal(file);
-    } catch (error) {
-      console.error('[camera] Latar belakang gagal', error);
-      showToast(`Project tersimpan, tetapi stamp/galeri gagal: ${error.message}`, { type: 'error', duration: 6000 });
-    }
-  }
-
-  async completeCaptureMetadata(metadata) {
-    const completed = structuredClone(metadata);
-    if (!isValidCoordinate(completed.latitude, completed.longitude)) {
-      const cached = getCachedLocation(90_000);
-      if (cached) Object.assign(completed, cached);
-    }
-    if (isValidCoordinate(completed.latitude, completed.longitude) && !completed.address && navigator.onLine) {
-      const address = await reverseGeocode(completed.latitude, completed.longitude).catch(() => null);
-      if (address) Object.assign(completed, address);
-    }
-    return completed;
   }
 
   async startGallery() {
