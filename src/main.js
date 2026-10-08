@@ -10,7 +10,7 @@ import { readExif } from './services/exif-service.js';
 import { createThumbnailFromSource, fileToDataUrl, loadImageSource } from './services/image-service.js';
 import { getCachedLocation, getCurrentLocation, getPermissionSnapshot, reverseGeocode } from './services/location-service.js';
 import { selectCameraPhoto, selectGalleryPhotos } from './services/media-service.js';
-import { createExport, saveExport, shareExport } from './services/export-service.js';
+import { shareExport } from './services/export-service.js';
 import { renderHomeScreen } from './screens/home-screen.js';
 import { renderProjectsScreen } from './screens/projects-screen.js';
 import { renderTemplatesScreen } from './screens/templates-screen.js';
@@ -221,15 +221,11 @@ class GPSMapCameraApp {
       this.pendingCaptures = Math.max(0, this.pendingCaptures - 1);
       onStatus({ state: 'saved', pending: this.pendingCaptures, project });
       const control = this.getControlConfig().camera;
-      const backgroundHighRes = this.store.getState().settings.backgroundHighRes !== false;
       if (control.showSaveConfirmation) {
-        showToast(backgroundHighRes
-          ? 'Foto tersimpan. Stamp resolusi tinggi diproses di latar belakang.'
-          : 'Foto tersimpan sebagai project.', { duration: 3300 });
+        showToast('Foto tersimpan.', { duration: 2500 });
       }
-      // Jalur berat (lengkapi alamat + render stamp resolusi tinggi + simpan
-      // ke galeri) jalan terpisah di latar belakang tanpa memblokir
-      // jepretan berikutnya.
+      // Pelengkapan ringan (isi alamat bila kosong + salin foto asli ke
+      // galeri) jalan terpisah tanpa memblokir jepretan berikutnya.
       this.finishCaptureInBackground(project, { file, metadata }).catch((error) => {
         console.error('[camera] Penyelesaian latar belakang gagal', error);
       });
@@ -240,9 +236,9 @@ class GPSMapCameraApp {
     return result;
   }
 
-  // Melengkapi metadata (reverse geocode), menyimpan foto asli ke galeri,
-  // dan me-render stamp resolusi tinggi — semuanya di latar belakang
-  // setelah foto tersimpan, agar tombol shutter tidak pernah menunggu.
+  // Melengkapi metadata (reverse geocode) dan menyimpan foto asli ke
+  // galeri — pekerjaan ringan yang jalan setelah foto tersimpan agar
+  // tombol shutter tidak pernah menunggu.
   async finishCaptureInBackground(project, { file, metadata }) {
     if (!project) return;
     try {
@@ -256,13 +252,7 @@ class GPSMapCameraApp {
       }
       if (enriched) await this.saveProjectNow(project);
       const control = this.getControlConfig().camera;
-      const backgroundHighRes = this.store.getState().settings.backgroundHighRes !== false;
       if (control.saveOriginalToGallery) this.persistCameraOriginal(file);
-      if (backgroundHighRes && control.autoSaveStamped) {
-        const exported = await createExport(project, control.captureQuality);
-        await saveExport(exported);
-        await this.recordExport(project.id, exported);
-      }
     } catch (error) {
       console.error('[camera] Latar belakang gagal', error);
       showToast(`Project tersimpan, tetapi stamp/galeri gagal: ${error.message}`, { type: 'error', duration: 6000 });
