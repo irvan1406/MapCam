@@ -15,7 +15,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showAddress: true,
   showCoordinates: true,
   autoSave: true,
-  backgroundHighRes: true,
   customTileProvider: null,
 });
 
