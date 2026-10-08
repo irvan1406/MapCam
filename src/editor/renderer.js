@@ -48,8 +48,8 @@ export function calculateStampBounds(project, canvasWidth, canvasHeight) {
   const variant = project.template.layout.variant ?? 'classic';
   const contentLines = countContentLines(project);
   const hasMap = project.template.fields.map;
-  const variantRatio = { datetime: 0.26, qr: 0.27, report: 0.25, compass: 0.28, advanced: 0.25 }[variant];
-  const rowRatio = variantRatio ?? Math.max(hasMap ? 0.22 : 0.12, Math.min(0.36, 0.1 + contentLines * 0.038));
+  const variantRatio = { datetime: 0.26, qr: 0.30, report: 0.25, compass: 0.28, advanced: 0.25 }[variant];
+  const rowRatio = variantRatio ?? Math.max(hasMap ? 0.24 : 0.13, Math.min(0.38, 0.115 + contentLines * 0.042));
   const estimatedRatio = isColumn ? 0.54 + Math.min(0.2, contentLines * 0.025) : rowRatio;
   const rowHeightLimit = canvasWidth > canvasHeight ? 0.28 : 0.34;
   const maximumHeight = canvasHeight * (isColumn ? 0.52 : rowHeightLimit);
@@ -191,7 +191,7 @@ async function drawQrTemplate(context, project, bounds, padding, scaleBase, pane
       zoom: project.map.zoom, providerId: project.map.providerId, radius: radius * 0.65, preview: options.preview,
     });
   }
-  drawTextContent(context, project, { x: textX, y: bounds.y + padding, width: Math.max(30, textRight - textX), height: innerHeight }, scaleBase * 0.84, panel);
+  drawTextContent(context, project, { x: textX, y: bounds.y + padding, width: Math.max(30, textRight - textX), height: innerHeight }, scaleBase * 0.95, panel);
   if (qrBounds) {
     const value = createLocationQrValue(project.displayData);
     if (value) drawQrCode(context, qrBounds, value);
@@ -341,10 +341,10 @@ function drawTextContent(context, project, bounds, scaleBase, panel, options = {
   const fields = project.template.fields;
   const metadata = project.displayData;
   const scale = scaleBase * project.overlay.textScale;
-  const baseSize = Math.max(11, 25 * scale);
-  const smallSize = Math.max(9, 18 * scale);
-  const titleSize = Math.max(12, 31 * scale);
-  const lineGap = Math.max(4, 7 * scale);
+  const baseSize = Math.max(11, 28 * scale);
+  const smallSize = Math.max(9, 21 * scale);
+  const titleSize = Math.max(12, 36 * scale);
+  const lineGap = Math.max(4, 8 * scale);
   let cursorY = bounds.y;
   const align = project.overlay.alignment || project.template.layout.textAlign || 'left';
   const textX = align === 'center' ? bounds.x + bounds.width / 2 : align === 'right' ? bounds.x + bounds.width : bounds.x;
