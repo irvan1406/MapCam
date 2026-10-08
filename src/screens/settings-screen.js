@@ -21,6 +21,10 @@ export async function renderSettingsScreen(app, root) {
         ${selectRow('Template default', 'defaultTemplateId', settings.defaultTemplateId, BUILT_IN_TEMPLATES.map((item) => [item.id,item.name]))}
         ${selectRow('Posisi stamp', 'stampPosition', settings.stampPosition, [['bottom-left','Kiri bawah'],['bottom-right','Kanan bawah'],['top-left','Kiri atas'],['top-right','Kanan atas']])}
       `)}
+      ${settingsGroup('Kamera', 'camera', `
+        ${toggleRow('Stamp resolusi tinggi di latar belakang', 'backgroundHighRes', settings.backgroundHighRes)}
+        <p class="setting-help">Aktif: sekali jepret langsung tersimpan, stamp resolusi tinggi diproses otomatis di belakang layar. Mati: foto tersimpan instan tanpa proses tambahan — export dilakukan manual dari editor.</p>
+      `)}
       ${settingsGroup('Format data', 'clock', `
         ${selectRow('Format koordinat', 'coordinateFormat', settings.coordinateFormat, [['decimal','Desimal (-8.123456)'],['dms','Derajat / menit / detik']])}
         ${selectRow('Format tanggal', 'dateFormat', settings.dateFormat, [['long-id','20 Agustus 2026'],['dd/mm/yyyy','20/08/2026'],['dd-mm-yyyy','20-08-2026'],['long-en','Thursday, 20 August 2026']])}
