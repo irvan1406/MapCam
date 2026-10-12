@@ -291,16 +291,26 @@ function bindPanelEvents(app, root, project, saveChange, drawPreview) {
     }
     await saveChange('coordinates');
   }));
+  let previewDebounceTimer = null;
+  const requestDebouncedPreview = () => {
+    // Geser slider tidak me-render ulang tiap tick: tunggu jeda 160ms agar enteng.
+    clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(() => { previewDebounceTimer = null; drawPreview(); }, 160);
+  };
   panel.querySelectorAll('[data-project-path]').forEach((input) => {
-    const update = async (commit = false) => {
+    const applyValue = () => {
       setPath(project, input.dataset.projectPath, input.type === 'range' ? Number(input.value) : input.value);
       const output = panel.querySelector(`[data-path-output="${input.dataset.projectPath}"]`);
       if (output) output.textContent = input.dataset.projectPath === 'map.zoom' ? input.value : `${Math.round(Number(input.value) * 100)}%`;
-      await drawPreview();
-      if (commit) await saveChange('style', false);
     };
-    input.addEventListener('input', () => update(false));
-    input.addEventListener('change', () => update(true));
+    input.addEventListener('input', () => { applyValue(); requestDebouncedPreview(); });
+    input.addEventListener('change', async () => {
+      clearTimeout(previewDebounceTimer);
+      previewDebounceTimer = null;
+      applyValue();
+      await drawPreview();
+      await saveChange('style', false);
+    });
   });
   panel.querySelectorAll('[data-alignment]').forEach((button) => button.addEventListener('click', async () => {
     project.overlay.alignment = button.dataset.alignment;
