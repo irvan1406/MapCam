@@ -33,6 +33,8 @@ android {
     }
 
     sourceSets {
+        // Web layer (dist/) dibundel sebagai aset: hasil `npm run build` sebelum assemble.
+        // Perubahan di src/ ikut terbawa ke APK lewat langkah build web ini.
         main.assets.srcDirs = [new File(repositoryRoot, "dist")]
     }
 
