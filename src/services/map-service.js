@@ -76,7 +76,7 @@ export async function drawMiniMap(context, bounds, location, options = {}) {
   }));
 
   if (!loadedCount) drawMapUnavailable(context, bounds, navigator.onLine ? 'Map gagal dimuat' : 'Map offline');
-  drawMarker(context, x + width / 2, y + height / 2, Math.max(9, Math.min(width, height) * 0.09));
+  drawMarker(context, x + width / 2, y + height / 2, Math.max(10, Math.min(width, height) * 0.11));
   drawAttribution(context, bounds, layout.provider.attribution);
   context.restore();
   return { loaded: loadedCount > 0, provider: layout.provider };
@@ -133,34 +133,48 @@ function loadTile(url) {
   return promise;
 }
 
-function drawMarker(context, centerX, centerY, radius) {
+function drawMarker(context, centerX, centerY, halfSide) {
+  // Teardrop pin yang identik dengan CSS .map-pin di kamera:
+  // kotak dengan border-radius 50% 50% 50% 0 yang diputar -45deg,
+  // sudut tajamnya (kiri-bawah) menjadi ujung pin di bawah.
+  const s = halfSide;
   context.save();
-  context.shadowColor = 'rgba(15, 23, 42, .38)';
-  context.shadowBlur = radius * 0.8;
-  context.shadowOffsetY = radius * 0.35;
+  context.translate(centerX, centerY - s * 0.68);
+  context.rotate(-Math.PI / 4);
+  context.shadowColor = 'rgba(15,23,42,.35)';
+  context.shadowBlur = s * 1.1;
+  context.shadowOffsetY = s * 0.45;
   context.fillStyle = '#0ea5e9';
   context.beginPath();
-  context.arc(centerX, centerY - radius * 0.45, radius, Math.PI * 0.08, Math.PI * 0.92, true);
-  context.lineTo(centerX, centerY + radius * 1.6);
+  // Tiga sudut membulat 50% = tiga perempat lingkaran; sudut kiri-bawah tajam.
+  context.arc(0, 0, s, Math.PI, Math.PI * 0.5, false);
+  context.lineTo(-s, s);
   context.closePath();
   context.fill();
+  // Titik putih di tengah, seperti .map-pin span.
   context.shadowColor = 'transparent';
+  context.shadowBlur = 0;
+  context.shadowOffsetY = 0;
   context.fillStyle = '#ffffff';
   context.beginPath();
-  context.arc(centerX, centerY - radius * 0.45, radius * 0.38, 0, Math.PI * 2);
+  context.arc(0, 0, s * 0.43, 0, Math.PI * 2);
   context.fill();
   context.restore();
 }
 
 function drawAttribution(context, bounds, text) {
+  // Sama seperti .map-attribution di kamera: teks mungil di kanan bawah, tanpa latar.
   context.save();
-  context.font = `${Math.max(8, bounds.height * 0.042)}px system-ui, sans-serif`;
-  const padding = Math.max(3, bounds.height * 0.025);
-  const width = context.measureText(text).width + padding * 2;
-  context.fillStyle = 'rgba(255,255,255,.78)';
-  context.fillRect(bounds.x + bounds.width - width, bounds.y + bounds.height - 14 - padding, width, 14 + padding);
-  context.fillStyle = '#334155';
-  context.fillText(text, bounds.x + bounds.width - width + padding, bounds.y + bounds.height - padding);
+  context.font = `${Math.max(7, bounds.height * 0.05)}px system-ui, sans-serif`;
+  context.textAlign = 'right';
+  context.textBaseline = 'alphabetic';
+  const padding = Math.max(3, bounds.height * 0.03);
+  const x = bounds.x + bounds.width - padding;
+  const y = bounds.y + bounds.height - padding;
+  context.shadowColor = 'rgba(255,255,255,.85)';
+  context.shadowBlur = 3;
+  context.fillStyle = 'rgba(51,65,85,.92)';
+  context.fillText(text, x, y, bounds.width - padding * 2);
   context.restore();
 }
 
